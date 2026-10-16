@@ -1,1 +1,1 @@
-{"framework":"nextjs","buildCommand":"npx prisma generate --schema=prisma/schema.prisma && npx next build apps/web","regions":["hnd1"]}
+{"framework":"nextjs","buildCommand":"npx prisma generate --schema=prisma/schema.prisma && npx next build apps/web","outputDirectory":"apps/web/.next","regions":["hnd1"]}
