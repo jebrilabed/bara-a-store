@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ArrowLeft, Bell, Boxes, CircleAlert, ClipboardList, Package, Plus, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Bell, Boxes, CircleAlert, ClipboardList, MapPin, Package, Plus, ShoppingBag } from "lucide-react";
 import { db } from "@/lib/db";
-import { money } from "@/lib/settings";
+import { getSetting, money } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -13,35 +13,68 @@ const ORDER_STATUS: Record<string, string> = {
   CANCELLED: "ملغي",
 };
 
+type DashboardData = {
+  orderCount: number;
+  newOrderCount: number;
+  productCount: number;
+  lowStockCount: number;
+  unreadNotificationCount: number;
+  completedSales: string;
+  recentOrders: Array<{ id: string; name: string; total: string; status: string; createdAt: string }>;
+  lowStockProducts: Array<{ id: string; name: string; stock: number; image: string | null }>;
+  latestProducts: Array<{ id: string; name: string; image: string | null; price: string; category: { name: string } }>;
+};
+
 export default async function DashboardPage() {
-  const [orderCount, newOrderCount, productCount, lowStockCount, unreadNotificationCount, completedSales, recentOrders, lowStockProducts, latestProducts] = await Promise.all([
-    db.order.count(),
-    db.order.count({ where: { status: "NEW" } }),
-    db.product.count({ where: { active: true } }),
-    db.product.count({ where: { active: true, stock: { lte: 5 } } }),
-    db.notification.count({ where: { read: false } }),
-    db.order.aggregate({ where: { status: "DONE" }, _sum: { total: true } }),
-    db.order.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      select: { id: true, name: true, total: true, status: true, createdAt: true },
-    }),
-    db.product.findMany({
-      where: { active: true, stock: { lte: 5 } },
-      orderBy: { stock: "asc" },
-      take: 5,
-      select: { id: true, name: true, stock: true, image: true },
-    }),
-    db.product.findMany({
-      where: { active: true },
-      orderBy: { id: "desc" },
-      take: 5,
-      select: { id: true, name: true, image: true, price: true, category: { select: { name: true } } },
-    }),
+  const [data, storeAddress] = await Promise.all([
+    db.$queryRaw<DashboardData[]>`
+      SELECT
+        (SELECT COUNT(*)::int FROM "Order") AS "orderCount",
+        (SELECT COUNT(*)::int FROM "Order" WHERE "status" = 'NEW') AS "newOrderCount",
+        (SELECT COUNT(*)::int FROM "Product" WHERE "active" IS TRUE) AS "productCount",
+        (SELECT COUNT(*)::int FROM "Product" WHERE "active" IS TRUE AND "stock" <= 5) AS "lowStockCount",
+        (SELECT COUNT(*)::int FROM "Notification" WHERE "read" IS FALSE) AS "unreadNotificationCount",
+        (SELECT COALESCE(SUM("total"), 0)::text FROM "Order" WHERE "status" = 'DONE') AS "completedSales",
+        (
+          SELECT COALESCE(jsonb_agg(jsonb_build_object(
+            'id', recent."id", 'name', recent."name", 'total', recent."total"::text,
+            'status', recent."status", 'createdAt', recent."createdAt"
+          )), '[]'::jsonb)
+          FROM (
+            SELECT "id", "name", "total", "status", "createdAt"
+            FROM "Order" ORDER BY "createdAt" DESC LIMIT 5
+          ) recent
+        ) AS "recentOrders",
+        (
+          SELECT COALESCE(jsonb_agg(jsonb_build_object(
+            'id', low."id", 'name', low."name", 'stock', low."stock", 'image', low."image"
+          )), '[]'::jsonb)
+          FROM (
+            SELECT "id", "name", "stock", "image"
+            FROM "Product" WHERE "active" IS TRUE AND "stock" <= 5
+            ORDER BY "stock" ASC LIMIT 5
+          ) low
+        ) AS "lowStockProducts",
+        (
+          SELECT COALESCE(jsonb_agg(jsonb_build_object(
+            'id', latest."id", 'name', latest."name", 'image', latest."image",
+            'price', latest."price"::text, 'category', jsonb_build_object('name', category."name")
+          )), '[]'::jsonb)
+          FROM (
+            SELECT "id", "name", "image", "price", "categoryId"
+            FROM "Product" WHERE "active" IS TRUE ORDER BY "id" DESC LIMIT 5
+          ) latest
+          JOIN "Category" category ON category."id" = latest."categoryId"
+        ) AS "latestProducts"
+    `,
+    getSetting("store_address", "فلسطين"),
   ]);
+  const dashboard = data[0];
+  const { orderCount, newOrderCount, productCount, lowStockCount, unreadNotificationCount, completedSales, lowStockProducts, latestProducts } = dashboard;
+  const recentOrders = dashboard.recentOrders.map((order) => ({ ...order, createdAt: new Date(order.createdAt) }));
 
   const stats = [
-    { label: "مبيعات مكتملة", value: money(completedSales._sum.total ?? 0), hint: "للطلبات المكتملة", icon: ShoppingBag, href: "/admin/orders", tone: "green" },
+    { label: "مبيعات مكتملة", value: money(completedSales ?? 0), hint: "للطلبات المكتملة", icon: ShoppingBag, href: "/admin/orders", tone: "green" },
     { label: "طلبات جديدة", value: newOrderCount, hint: `من أصل ${orderCount} طلب`, icon: ClipboardList, href: "/admin/orders", tone: "rose" },
     { label: "منتجات نشطة", value: productCount, hint: "ظاهرة في المتجر", icon: Package, href: "/admin/products", tone: "gray" },
     { label: "مخزون منخفض", value: lowStockCount, hint: "5 قطع أو أقل", icon: Boxes, href: "/admin/inventory", tone: lowStockCount > 0 ? "amber" : "green" },
@@ -55,6 +88,10 @@ export default async function DashboardPage() {
           <span className="dashboard-eyebrow">متجر براعة</span>
           <h2>لوحة التحكم</h2>
           <p>ملخص سريع لما يحتاج متابعة في متجرك.</p>
+          <p style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "5px" }}>
+            <MapPin size={15} aria-hidden="true" />
+            <span>{storeAddress}</span>
+          </p>
         </div>
         <div className="dashboard-header__actions">
           <Link href="/admin/orders" className="dashboard-button dashboard-button--quiet">

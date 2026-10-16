@@ -3,16 +3,23 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import { db } from "@/lib/db";
+import LoadingButton from "@/components/ui/LoadingButton";
 
 async function register(fd: FormData) {
   "use server";
   const name = String(fd.get("name") ?? "").trim();
   const email = String(fd.get("email") ?? "").trim().toLowerCase();
   const password = String(fd.get("password") ?? "");
+  const city = String(fd.get("city") ?? "").trim();
+  const address = String(fd.get("address") ?? "").trim();
 
   if (
     !name ||
     name.length > 120 ||
+    !city ||
+    city.length > 120 ||
+    !address ||
+    address.length > 500 ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
     email.length > 254 ||
     password.length < 8 ||
@@ -34,6 +41,8 @@ async function register(fd: FormData) {
         email,
         password: await bcrypt.hash(password, 12),
         role: "CUSTOMER",
+        city,
+        address,
       },
     });
   } catch (error: any) {
@@ -48,7 +57,7 @@ export default function Register({ searchParams }: { searchParams?: { error?: st
     searchParams?.error === "exists"
       ? "هذا البريد الإلكتروني مسجل مسبقاً. يمكنكِ تسجيل الدخول مباشرة."
       : searchParams?.error === "invalid"
-      ? "يرجى التأكد من كتابة الاسم والبريد بشكل صحيح، وكلمة المرور (8 أحرف على الأقل)."
+      ? "يرجى التأكد من الاسم والمدينة والعنوان والبريد، وأن كلمة المرور 8 أحرف على الأقل."
       : "";
 
   return (
@@ -109,6 +118,32 @@ export default function Register({ searchParams }: { searchParams?: { error?: st
           </label>
 
           <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 700, fontSize: "0.95rem" }}>
+            <span>المدينة</span>
+            <input
+              name="city"
+              type="text"
+              placeholder="مثال: نابلس"
+              maxLength={120}
+              required
+              autoComplete="address-level2"
+              style={{ width: "100%", padding: "12px 16px", borderRadius: "14px", border: "1.5px solid var(--line)", outline: "none" }}
+            />
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 700, fontSize: "0.95rem" }}>
+            <span>العنوان بالتفصيل</span>
+            <textarea
+              name="address"
+              placeholder="الحي، الشارع، رقم المبنى، وأقرب علامة مميزة"
+              maxLength={500}
+              required
+              autoComplete="street-address"
+              rows={3}
+              style={{ width: "100%", padding: "12px 16px", borderRadius: "14px", border: "1.5px solid var(--line)", outline: "none", resize: "vertical" }}
+            />
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 700, fontSize: "0.95rem" }}>
             <span>البريد الإلكتروني</span>
             <input
               name="email"
@@ -136,9 +171,10 @@ export default function Register({ searchParams }: { searchParams?: { error?: st
             <small style={{ color: "var(--soft)", fontSize: "0.8rem" }}>يجب أن تتكون من 8 أحرف على الأقل</small>
           </label>
 
-          <button
+          <LoadingButton
             type="submit"
             className="btn"
+            pendingText="جارٍ إنشاء الحساب..."
             style={{
               width: "100%",
               padding: "14px",
@@ -151,7 +187,7 @@ export default function Register({ searchParams }: { searchParams?: { error?: st
             }}
           >
             إنشاء الحساب
-          </button>
+          </LoadingButton>
         </form>
 
         <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--line)", textAlign: "center", fontSize: "0.95rem", color: "var(--soft)" }}>

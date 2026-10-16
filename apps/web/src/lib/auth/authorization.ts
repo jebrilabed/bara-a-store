@@ -1,18 +1,16 @@
 import { auth } from "@/auth";
-import { db } from "@/lib/db";
+import { cache } from "react";
+import { redirect } from "next/navigation";
 
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async function getCurrentUser() {
   const session = await auth();
-  const userId = (session?.user as any)?.id;
-  if (typeof userId !== "string" || !userId) return null;
-  return db.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, email: true, role: true },
-  });
-}
+  const user = session?.user as { id?: string; name?: string | null; email?: string | null; role?: string } | undefined;
+  if (typeof user?.id !== "string" || !user.id || !user.role) return null;
+  return { id: user.id, name: user.name ?? "", email: user.email ?? "", role: user.role };
+});
 
 export async function requireAdmin() {
   const user = await getCurrentUser();
-  if (!user || user.role !== "ADMIN") throw new Error("Unauthorized");
+  if (!user || user.role !== "ADMIN") redirect("/ar/login?error=admin");
   return user;
 }

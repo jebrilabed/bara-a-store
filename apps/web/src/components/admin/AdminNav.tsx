@@ -64,7 +64,6 @@ export default function AdminNav() {
       <div className="admin-sidebar__footer">
         <Link
           href="/ar"
-          target="_blank"
           className="admin-store-link"
         >
           <ExternalLink size={15} />

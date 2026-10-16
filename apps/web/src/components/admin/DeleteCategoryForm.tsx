@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { Trash2 } from "lucide-react";
+import LoadingButton from "@/components/ui/LoadingButton";
 
 type DeleteCategoryFormProps = {
   id: string;
@@ -17,15 +18,16 @@ export default function DeleteCategoryForm({ id, action, disabled }: DeleteCateg
   return (
     <form action={action} onSubmit={confirmDelete}>
       <input type="hidden" name="id" value={id} />
-      <button
+      <LoadingButton
         type="submit"
         className="product-action product-action--delete"
         disabled={disabled}
         title={disabled ? "لا يمكن حذف قسم يحتوي على منتجات" : "حذف القسم"}
+        pendingText="جارٍ..."
       >
         <Trash2 size={14} />
         <span>حذف</span>
-      </button>
+      </LoadingButton>
     </form>
   );
 }

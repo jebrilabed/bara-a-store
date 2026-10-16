@@ -3,11 +3,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import LoadingButton from "@/components/ui/LoadingButton";
 import type { ProductType } from "@/generated/prisma";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { InputError, parseProductInput } from "@/lib/backend-policy.mjs";
 import { writeAdminAudit } from "@/lib/admin/audit";
 import { uploadProductImage } from "@/lib/cloudinary";
+import { revalidatePublicCatalog } from "@/lib/storefront/catalog";
+import ProductImageField from "@/components/admin/ProductImageField";
+import ProductFeaturesField from "@/components/admin/ProductFeaturesField";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +49,8 @@ async function createProduct(fd: FormData) {
   revalidatePath("/admin/inventory");
   revalidatePath("/ar");
   revalidatePath("/ar/products");
-  redirect("/admin/products?status=created");
+  revalidatePublicCatalog();
+  redirect("/admin/products?toast=product-created");
 }
 
 export default async function NewProductPage() {
@@ -175,19 +180,9 @@ export default async function NewProductPage() {
 
           </div>
 
-          {/* Image */}
-          <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 700, fontSize: "0.95rem" }}>
-            <span>صورة المنتج</span>
-            <input
-              name="image"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              style={{ width: "100%", padding: "12px 16px", borderRadius: "14px", border: "1.5px solid var(--line)" }}
-            />
-            <small style={{ color: "var(--soft)", fontSize: "0.8rem" }}>
-              ارفعي صورة بصيغة JPG أو PNG أو WebP، بحد أقصى 5 ميجابايت.
-            </small>
-          </label>
+          <ProductFeaturesField />
+
+          <ProductImageField helpText="ارفعي صورة بصيغة JPG أو PNG أو WebP، بحد أقصى 5 ميجابايت." />
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "12px", paddingTop: "18px", borderTop: "1px solid var(--line)" }}>
             <Link
@@ -197,13 +192,14 @@ export default async function NewProductPage() {
             >
               إلغاء
             </Link>
-            <button
+            <LoadingButton
               type="submit"
               className="btn"
+              pendingText="جارٍ نشر المنتج..."
               style={{ padding: "12px 36px", borderRadius: "14px", fontSize: "1rem" }}
             >
               حفظ ونشر المنتج
-            </button>
+            </LoadingButton>
           </div>
         </form>
       </div>

@@ -6,6 +6,24 @@ import { CART_COOKIE_NAME, getOrCreateActiveCart, validCartToken } from "@/lib/s
 
 export const dynamic = "force-dynamic";
 const CART_MAX_AGE = 30 * 24 * 60 * 60;
+const CART_PERF_TRACE = process.env.CART_PERF_TRACE === "1";
+
+function logCartTiming(action: string, startedAt: number, stages: Record<string, number>, correlationId: string | null = null) {
+  if (!CART_PERF_TRACE) return;
+  console.info("[cart-perf]", JSON.stringify({
+    ...(correlationId ? { correlationId } : {}),
+    action,
+    totalMs: Math.round(performance.now() - startedAt),
+    stages: Object.fromEntries(Object.entries(stages).map(([name, duration]) => [name, Math.round(duration)])),
+  }));
+}
+
+function getCartPerfId(request: NextRequest) {
+  const value = request.headers.get("x-cart-perf-id");
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+    ? value.toLowerCase()
+    : null;
+}
 
 function cartPayload(cart: any) {
   const items = cart.items.map((line: any) => ({
@@ -56,78 +74,140 @@ function errorResponse(error: unknown) {
 }
 
 export async function GET(request: NextRequest) {
+  const startedAt = performance.now();
+  const stages: Record<string, number> = {};
   try {
+    let stageStartedAt = performance.now();
     const user = await getCurrentUser();
+    stages.authMs = performance.now() - stageStartedAt;
     const cookie = request.cookies.get(CART_COOKIE_NAME)?.value;
+    stageStartedAt = performance.now();
     const result = await db.$transaction((tx) =>
       getOrCreateActiveCart(tx, user?.id ?? null, validCartToken(cookie) ? cookie : null),
     );
-    return applyCartCookie(NextResponse.json(cartPayload(result.cart)), result);
+    stages.transactionMs = performance.now() - stageStartedAt;
+    stageStartedAt = performance.now();
+    const response = applyCartCookie(NextResponse.json(cartPayload(result.cart)), result);
+    stages.responseMs = performance.now() - stageStartedAt;
+    logCartTiming("get", startedAt, stages);
+    return response;
   } catch (error) {
+    logCartTiming("get-error", startedAt, stages);
     return errorResponse(error);
   }
 }
 
 export async function POST(request: NextRequest) {
+  const startedAt = performance.now();
+  const stages: Record<string, number> = {};
+  const correlationId = getCartPerfId(request);
+  let action = "invalid";
   try {
     let body: any;
+    let stageStartedAt = performance.now();
     try { body = await request.json(); }
     catch { throw new InputError("بيانات السلة غير صالحة"); }
+    stages.parseMs = performance.now() - stageStartedAt;
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new InputError("Invalid cart request");
+    action = ["add", "set", "refresh", "remove", "clear", "sync"].includes(body.action) ? body.action : "invalid";
+    stageStartedAt = performance.now();
     const user = await getCurrentUser();
+    stages.authMs = performance.now() - stageStartedAt;
     const cookie = request.cookies.get(CART_COOKIE_NAME)?.value;
+    const requestedProductId = ["add", "set", "refresh"].includes(body.action) && typeof body.productId === "string"
+      ? body.productId
+      : null;
+    stageStartedAt = performance.now();
     const result = await db.$transaction(async (tx) => {
-      const resolved = await getOrCreateActiveCart(tx, user?.id ?? null, validCartToken(cookie) ? cookie : null);
+      const callbackStartedAt = performance.now();
+      let queryStartedAt = performance.now();
+      const resolved = await getOrCreateActiveCart(tx, user?.id ?? null, validCartToken(cookie) ? cookie : null, false, true, requestedProductId);
+      stages.cartResolutionMs = performance.now() - queryStartedAt;
       const cart = resolved.cart;
-      await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${cart.id} FOR UPDATE`;
+      if (!resolved.locked) {
+        queryStartedAt = performance.now();
+        await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${cart.id} FOR UPDATE`;
+        stages.lockMs = performance.now() - queryStartedAt;
+      }
+      queryStartedAt = performance.now();
+      const cartItems = resolved.locked ? cart.items : body.action === "clear" ? [] : await tx.cartItem.findMany({
+        where: { cartId: cart.id },
+        include: {
+          product: { select: { id: true, name: true, price: true, stock: true, image: true, active: true } },
+        },
+      });
+      stages.cartReadMs = performance.now() - queryStartedAt;
+      let responseItems = cartItems;
 
+      const mutationStartedAt = performance.now();
       if (body.action === "add") {
         const productId = typeof body.productId === "string" ? body.productId : "";
         const quantity = parseCartQuantity(body.quantity ?? 1);
-        const product = await tx.product.findUnique({ where: { id: productId } });
-        if (!product?.active) throw new Error("CART_UNAVAILABLE");
-        const existing = await tx.cartItem.findUnique({
-          where: { cartId_productId: { cartId: cart.id, productId } },
+        const existing = cartItems.find((item) => item.productId === productId);
+        const product = existing?.product ?? resolved.targetProduct ?? await tx.product.findUnique({
+          where: { id: productId },
+          select: { id: true, name: true, price: true, stock: true, image: true, active: true },
         });
+        if (!product?.active) throw new Error("CART_UNAVAILABLE");
         const nextQuantity = (existing?.quantity ?? 0) + quantity;
         if (nextQuantity > 99 || nextQuantity > product.stock) throw new Error("CART_STOCK");
-        await tx.cartItem.upsert({
+        const updatedItem = await tx.cartItem.upsert({
           where: { cartId_productId: { cartId: cart.id, productId } },
           create: { cartId: cart.id, productId, quantity, priceSnapshot: product.price },
           update: { quantity: nextQuantity, priceSnapshot: product.price },
         });
+        const updatedLine = { ...updatedItem, product };
+        responseItems = existing
+          ? cartItems.map((item) => item.id === existing.id ? updatedLine : item)
+          : [...cartItems, updatedLine];
       } else if (body.action === "set") {
         const productId = typeof body.productId === "string" ? body.productId : "";
         const quantity = parseCartQuantity(body.quantity, { allowZero: true });
         if (quantity === 0) {
           await tx.cartItem.deleteMany({ where: { cartId: cart.id, productId } });
+          responseItems = cartItems.filter((item) => item.productId !== productId);
         } else {
-          const product = await tx.product.findUnique({ where: { id: productId } });
+          const existing = cartItems.find((item) => item.productId === productId);
+          const product = existing?.product ?? resolved.targetProduct ?? await tx.product.findUnique({
+            where: { id: productId },
+            select: { id: true, name: true, price: true, stock: true, image: true, active: true },
+          });
           if (!product?.active) throw new Error("CART_UNAVAILABLE");
           if (quantity > product.stock) throw new Error("CART_STOCK");
-          await tx.cartItem.upsert({
+          const updatedItem = await tx.cartItem.upsert({
             where: { cartId_productId: { cartId: cart.id, productId } },
             create: { cartId: cart.id, productId, quantity, priceSnapshot: product.price },
             update: { quantity, priceSnapshot: product.price },
           });
+          const updatedLine = { ...updatedItem, product };
+          responseItems = existing
+            ? cartItems.map((item) => item.id === existing.id ? updatedLine : item)
+            : [...cartItems, updatedLine];
         }
       } else if (body.action === "refresh") {
         const productId = typeof body.productId === "string" ? body.productId : "";
-        const product = await tx.product.findUnique({ where: { id: productId } });
-        if (!product?.active) throw new Error("CART_UNAVAILABLE");
-        const existing = await tx.cartItem.findUnique({
-          where: { cartId_productId: { cartId: cart.id, productId } },
-        });
+        const existing = cartItems.find((item) => item.productId === productId);
         if (!existing) throw new InputError("المنتج غير موجود في السلة");
+        const product = existing.product ?? resolved.targetProduct ?? await tx.product.findUnique({
+          where: { id: productId },
+          select: { id: true, name: true, price: true, stock: true, image: true, active: true },
+        });
+        if (!product?.active) throw new Error("CART_UNAVAILABLE");
         if (existing.quantity > product.stock) throw new Error("CART_STOCK");
-        await tx.cartItem.update({ where: { id: existing.id }, data: { priceSnapshot: product.price } });
+        const updatedItem = await tx.cartItem.update({
+          where: { id: existing.id },
+          data: { priceSnapshot: product.price },
+        });
+        responseItems = cartItems.map((item) => item.id === existing.id ? { ...updatedItem, product } : item);
       } else if (body.action === "remove") {
         const productId = typeof body.productId === "string" ? body.productId : "";
         await tx.cartItem.deleteMany({ where: { cartId: cart.id, productId } });
+        responseItems = cartItems.filter((item) => item.productId !== productId);
       } else if (body.action === "clear") {
         await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+        responseItems = [];
       } else if (body.action === "sync") {
-        if (cart.items.length) throw new Error("CART_NOT_EMPTY");
+        if (cartItems.length) throw new Error("CART_NOT_EMPTY");
         if (!Array.isArray(body.items) || body.items.length > 100) throw new InputError("Invalid cart items");
         const requested = new Map<string, number>();
         for (const item of body.items) {
@@ -135,25 +215,41 @@ export async function POST(request: NextRequest) {
           const quantity = parseCartQuantity(item.quantity);
           requested.set(item.productId, Math.min(99, quantity + (requested.get(item.productId) ?? 0)));
         }
-        const products = await tx.product.findMany({ where: { id: { in: [...requested.keys()] }, active: true } });
-        for (const product of products) {
+        const products = await tx.product.findMany({
+          where: { id: { in: [...requested.keys()] }, active: true },
+          select: { id: true, name: true, price: true, stock: true, image: true, active: true },
+        });
+        const itemsToCreate = products.flatMap((product) => {
           const quantity = Math.min(requested.get(product.id) ?? 0, product.stock);
-          if (quantity > 0) await tx.cartItem.create({ data: { cartId: cart.id, productId: product.id, quantity, priceSnapshot: product.price } });
+          return quantity > 0 ? [{ cartId: cart.id, productId: product.id, quantity, priceSnapshot: product.price }] : [];
+        });
+        if (itemsToCreate.length) {
+          await tx.cartItem.createMany({ data: itemsToCreate });
+          responseItems = await tx.cartItem.findMany({
+            where: { cartId: cart.id },
+            include: { product: { select: { id: true, name: true, price: true, stock: true, image: true, active: true } } },
+          });
         }
       } else {
         throw new InputError("Unsupported cart action");
       }
+      stages.mutationWorkMs = performance.now() - mutationStartedAt;
+      stages.transactionCallbackMs = performance.now() - callbackStartedAt;
 
       return {
         ...resolved,
-        cart: await tx.cart.findUniqueOrThrow({
-          where: { id: cart.id },
-          include: { items: { include: { product: true } } },
-        }),
+        cart: { ...cart, items: responseItems },
       };
     });
-    return applyCartCookie(NextResponse.json(cartPayload(result.cart)), result);
+    stages.transactionMs = performance.now() - stageStartedAt;
+    stages.transactionBoundaryMs = Math.max(0, stages.transactionMs - stages.transactionCallbackMs);
+    stageStartedAt = performance.now();
+    const response = applyCartCookie(NextResponse.json(cartPayload(result.cart)), result);
+    stages.responseMs = performance.now() - stageStartedAt;
+    logCartTiming(action, startedAt, stages, correlationId);
+    return response;
   } catch (error) {
+    logCartTiming(`${action}-error`, startedAt, stages, correlationId);
     return errorResponse(error);
   }
 }

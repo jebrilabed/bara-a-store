@@ -1,1 +1,5 @@
-export default { reactStrictMode: true, experimental: { serverActions: { bodySizeLimit: "6mb" } } };
+export default {
+	reactStrictMode: true,
+	...(process.env.NEXT_PERF_DIST_DIR ? { distDir: process.env.NEXT_PERF_DIST_DIR } : {}),
+	experimental: { serverActions: { bodySizeLimit: "6mb" } },
+};

@@ -86,6 +86,15 @@ export function parseProductInput(source) {
     throw new InputError("SKU code contains unsupported characters");
   }
 
+  const rawFeatures = typeof source?.getAll === "function"
+    ? source.getAll("features")
+    : Array.isArray(source?.features) ? source.features : source?.features == null ? [] : [source.features];
+  if (rawFeatures.length > 20) throw new InputError("لا يمكن إضافة أكثر من 20 ميزة للمنتج");
+  const features = rawFeatures.map((feature) => String(feature ?? "").trim()).filter(Boolean);
+  if (features.some((feature) => feature.length > 120)) {
+    throw new InputError("يجب ألا تتجاوز الميزة 120 حرفاً");
+  }
+
   return {
     name,
     slug: makeSlug(name),
@@ -101,6 +110,7 @@ export function parseProductInput(source) {
     safetyWarnings: boundedText(source, "safetyWarnings", 3000),
     storageInstructions: boundedText(source, "storageInstructions", 1500),
     manufacturer: boundedText(source, "manufacturer", 160),
+    features,
     price,
     compareAtPrice: compareAtPrice || null,
     stock: Number(stockText),
@@ -123,8 +133,11 @@ export function normalizePhone(value) {
 }
 
 export function parseCheckoutInput(source) {
+  const city = valueOf(source, "city");
   const name = valueOf(source, "name");
   const address = valueOf(source, "address");
+  if (!city) throw new InputError("المدينة مطلوبة");
+  if (city.length > 120) throw new InputError("اسم المدينة طويل جداً");
   if (!name) throw new InputError("الاسم مطلوب");
   if (name.length > 120) throw new InputError("الاسم طويل جداً");
   if (!address) throw new InputError("العنوان مطلوب");
@@ -138,7 +151,7 @@ export function parseCheckoutInput(source) {
   if (!/^[A-Za-z0-9._:-]{24,120}$/.test(idempotencyKey)) {
     throw new InputError("تعذر تأكيد محاولة الطلب. أعيدي تحميل الصفحة وحاولي مرة أخرى");
   }
-  return { name, phone, address, deliveryZoneId, idempotencyKey };
+  return { name, phone, city, address, deliveryZoneId, idempotencyKey };
 }
 
 export function parseDeliveryZones(value) {

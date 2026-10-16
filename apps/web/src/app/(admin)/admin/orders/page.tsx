@@ -1,9 +1,14 @@
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { Prisma } from "@/generated/prisma";
 import { db } from "@/lib/db";
+import LoadingButton from "@/components/ui/LoadingButton";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { InputError, canTransitionOrder } from "@/lib/backend-policy.mjs";
 import { writeAdminAudit } from "@/lib/admin/audit";
 import { money } from "@/lib/settings";
+import { revalidatePublicCatalog } from "@/lib/storefront/catalog";
 import { Package, MessageCircle, ArrowUpDown, ExternalLink } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +20,29 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   DONE: { label: "مكتمل", color: "#15803D", bg: "#F0FDF4" },
   CANCELLED: { label: "ملغي", color: "#B91C1C", bg: "#FEF2F2" },
 };
+
+const ORDERS_PER_PAGE = 25;
+const orderListSelect = {
+  id: true,
+  name: true,
+  phone: true,
+  city: true,
+  address: true,
+  total: true,
+  deliveryZone: true,
+  deliveryFee: true,
+  receiptPublicId: true,
+  status: true,
+  createdAt: true,
+  items: {
+    select: {
+      id: true,
+      qty: true,
+      productNameSnapshot: true,
+      product: { select: { name: true } },
+    },
+  },
+} satisfies Prisma.OrderSelect;
 
 async function changeStatus(fd: FormData) {
   "use server";
@@ -45,13 +73,32 @@ async function changeStatus(fd: FormData) {
   });
   revalidatePath("/admin/orders");
   revalidatePath("/ar/orders");
+  if (nextStatus === "CANCELLED") revalidatePublicCatalog();
+  redirect("/admin/orders?toast=order-status-updated");
 }
 
-export default async function OrdersPage() {
-  const orders = await db.order.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { items: { include: { product: true } } },
-  });
+export default async function OrdersPage({ searchParams }: { searchParams?: { page?: string } }) {
+  const requestedPage = Number(searchParams?.page);
+  const safePage = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const [totalOrders, requestedOrders] = await Promise.all([
+    db.order.count(),
+    db.order.findMany({
+      orderBy: { createdAt: "desc" },
+      skip: (safePage - 1) * ORDERS_PER_PAGE,
+      take: ORDERS_PER_PAGE,
+      select: orderListSelect,
+    }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(totalOrders / ORDERS_PER_PAGE));
+  const currentPage = Math.min(safePage, totalPages);
+  const orders = currentPage === safePage
+    ? requestedOrders
+    : await db.order.findMany({
+        orderBy: { createdAt: "desc" },
+        skip: (currentPage - 1) * ORDERS_PER_PAGE,
+        take: ORDERS_PER_PAGE,
+        select: orderListSelect,
+      });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -96,7 +143,7 @@ export default async function OrdersPage() {
       ) : (
         <div style={{ background: "#fff", borderRadius: "20px", border: "1px solid var(--line)", overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,0.02)" }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "start" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--mist)", borderBottom: "1px solid var(--line)" }}>
                   <th style={{ padding: "14px 18px", fontWeight: 800, color: "var(--rose-d)" }}>رقم الطلب</th>
@@ -141,6 +188,7 @@ export default async function OrdersPage() {
                         </a>
                       </td>
                       <td style={{ padding: "14px 18px", fontSize: "0.9rem", maxWidth: "200px" }}>
+                        {order.city && <div style={{ fontWeight: 700 }}>{order.city}</div>}
                         <div>{order.address}</div>
                         {order.deliveryZone && (
                           <div style={{ marginTop: "5px", color: "var(--soft)", fontSize: "0.8rem" }}>
@@ -204,14 +252,15 @@ export default async function OrdersPage() {
                               </option>
                             ))}
                           </select>
-                          <button
+                          <LoadingButton
                             type="submit"
                             disabled={availableStatuses.length === 1}
                             className="btn"
+                            pendingText="جارٍ حفظ الحالة..."
                             style={{ padding: "6px 14px", fontSize: "0.85rem", borderRadius: "10px" }}
                           >
                             حفظ
-                          </button>
+                          </LoadingButton>
                         </form>
                       </td>
                     </tr>
@@ -221,6 +270,13 @@ export default async function OrdersPage() {
             </table>
           </div>
         </div>
+      )}
+      {totalPages > 1 && (
+        <nav className="row" aria-label="صفحات الطلبات">
+          {currentPage > 1 && <Link className="btn o" href={`/admin/orders?page=${currentPage - 1}`}>السابق</Link>}
+          <span>صفحة {currentPage} من {totalPages} · {totalOrders} طلب</span>
+          {currentPage < totalPages && <Link className="btn" href={`/admin/orders?page=${currentPage + 1}`}>التالي</Link>}
+        </nav>
       )}
     </div>
   );

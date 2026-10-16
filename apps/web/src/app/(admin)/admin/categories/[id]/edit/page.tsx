@@ -3,9 +3,11 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import LoadingButton from "@/components/ui/LoadingButton";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { InputError, makeSlug } from "@/lib/backend-policy.mjs";
 import { writeAdminAudit } from "@/lib/admin/audit";
+import { revalidatePublicCatalog } from "@/lib/storefront/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,8 @@ async function updateCategory(fd: FormData) {
   revalidatePath("/admin/categories");
   revalidatePath("/ar");
   revalidatePath("/ar/categories");
-  redirect("/admin/categories?status=updated");
+  revalidatePublicCatalog();
+  redirect("/admin/categories?toast=category-updated");
 }
 
 export default async function EditCategoryPage({ params }: { params: { id: string } }) {
@@ -67,7 +70,7 @@ export default async function EditCategoryPage({ params }: { params: { id: strin
         </label>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "16px", borderTop: "1px solid #eceeea" }}>
           <Link href="/admin/categories" className="btn o">إلغاء</Link>
-          <button type="submit" className="btn">حفظ التعديلات</button>
+          <LoadingButton type="submit" className="btn" pendingText="جارٍ حفظ التعديلات...">حفظ التعديلات</LoadingButton>
         </div>
       </form>
     </section>

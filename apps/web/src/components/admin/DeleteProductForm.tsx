@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { Trash2 } from "lucide-react";
+import LoadingButton from "@/components/ui/LoadingButton";
 
 type DeleteProductFormProps = {
   id: string;
@@ -18,10 +19,10 @@ export default function DeleteProductForm({ id, action }: DeleteProductFormProps
   return (
     <form action={action} onSubmit={confirmDelete}>
       <input type="hidden" name="id" value={id} />
-      <button type="submit" className="product-action product-action--delete">
+      <LoadingButton type="submit" className="product-action product-action--delete" pendingText="جارٍ...">
         <Trash2 size={14} />
         <span>حذف</span>
-      </button>
+      </LoadingButton>
     </form>
   );
 }

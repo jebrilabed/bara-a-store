@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
+import { getStorefrontProduct } from "@/lib/storefront/catalog";
 import AddToCart from "@/components/storefront/AddToCart";
-import { publicProduct } from "@/lib/storefront/public-product";
+import { Check } from "lucide-react";
+import styles from "./ProductDetails.module.css";
 export const dynamic = "force-dynamic";
 
 const productTypeLabels: Record<string, string> = {
@@ -13,8 +14,7 @@ const productTypeLabels: Record<string, string> = {
 };
 
 export default async function P({ params }: any) {
-  const row = await db.product.findFirst({ where: { slug: decodeURIComponent(params.slug), active: true }, include: { category: true } }); if (!row) notFound();
-  const p = publicProduct(row);
+  const p = await getStorefrontProduct(decodeURIComponent(params.slug)); if (!p) notFound();
   const facts = [
     ["نوع المنتج", productTypeLabels[p.type] ?? p.type],
     ["القسم", p.category.name],
@@ -31,6 +31,16 @@ export default async function P({ params }: any) {
 
   return <>
     <div className="hero"><div className="blob"><img src={p.image || "/logo.png"} alt={p.name} /></div><div><h1>{p.name}</h1><p>{p.description}</p><p className="price">{p.price} ₪</p><AddToCart id={p.id} name={p.name} price={p.price} stock={p.stock} /></div></div>
+    {p.features?.length > 0 && (
+      <section className={styles.features} aria-labelledby="product-features-heading">
+        <h2 id="product-features-heading">مميزات المنتج</h2>
+        <ul>
+          {p.features.map((feature: string, index: number) => (
+            <li key={`${index}-${feature}`}><Check size={17} aria-hidden="true" /><span>{feature}</span></li>
+          ))}
+        </ul>
+      </section>
+    )}
     <section aria-labelledby="product-details-heading">
       <h2 id="product-details-heading">تفاصيل المنتج</h2>
       {facts.length ? <div className="grid">{facts.map(([label, value]) => <article className="card" key={label}><div className="in"><b>{label}</b><p>{value}</p></div></article>)}</div> : <p>لا توجد تفاصيل إضافية مسجلة لهذا المنتج.</p>}

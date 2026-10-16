@@ -1,6 +1,13 @@
 "use client";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useToast } from "@/components/ui/ToastProvider";
+function cartPerfTraceEnabled() {
+  try {
+    return localStorage.getItem("cartPerfTrace") === "1";
+  } catch {
+    return false;
+  }
+}
 export type Line = {
   id: string;
   name: string;
@@ -15,11 +22,13 @@ export type Line = {
 
 type CartContextValue = {
   lines: Line[];
-  add: (product: Pick<Line, "id">) => Promise<void>;
+  mutating: boolean;
+  add: (product: Pick<Line, "id" | "name" | "price"> & Partial<Pick<Line, "stock" | "image">>) => Promise<void>;
   set: (id: string, quantity: number) => Promise<void>;
   refresh: (id: string) => Promise<void>;
   reload: () => Promise<void>;
   clear: () => Promise<void>;
+  clearLocal: () => void;
   count: number;
   total: number;
   error: string;
@@ -46,29 +55,66 @@ function readCachedCart(): Line[] {
   }
 }
 
-async function requestCart(action: string, payload: Record<string, unknown> = {}) {
+async function requestCart(action: string, payload: Record<string, unknown> = {}, eventStartedAt = performance.now()) {
+  const requestStartedAt = performance.now();
+  const traceEnabled = cartPerfTraceEnabled();
+  const correlationId = traceEnabled && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null;
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (correlationId) headers.set("X-Cart-Perf-Id", correlationId);
   const response = await fetch("/api/cart", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     credentials: "same-origin",
     cache: "no-store",
     body: JSON.stringify({ action, ...payload }),
   });
+  const responseReceivedAt = performance.now();
   const data = await response.json().catch(() => ({}));
+  if (traceEnabled) {
+    console.info("[cart-client-perf]", JSON.stringify({
+      correlationId,
+      action,
+      eventToRequestMs: Math.round(requestStartedAt - eventStartedAt),
+      fetchToResponseMs: Math.round(responseReceivedAt - requestStartedAt),
+      responseBodyMs: Math.round(performance.now() - responseReceivedAt),
+      status: response.status,
+    }));
+  }
   if (!response.ok) throw new Error(data.error || "تعذر تحديث السلة");
   return data as { items: Line[] };
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { showToast } = useToast();
   const [lines, setLines] = useState<Line[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
+  const [mutating, setMutating] = useState(false);
+  const linesRef = useRef<Line[]>([]);
+  const mutationInFlight = useRef(false);
+  const pendingRender = useRef<{ phase: string; startedAt: number } | null>(null);
+
+  function replaceLines(nextLines: Line[]) {
+    linesRef.current = nextLines;
+    setLines(nextLines);
+  }
+
+  useEffect(() => {
+    const pending = pendingRender.current;
+    if (!pending) return;
+    pendingRender.current = null;
+    if (!cartPerfTraceEnabled()) return;
+    console.info("[cart-render-perf]", JSON.stringify({
+      phase: pending.phase,
+      commitMs: Math.round(performance.now() - pending.startedAt),
+    }));
+  }, [lines]);
 
   useEffect(() => {
     let active = true;
     async function load() {
       const cached = readCachedCart();
-      if (active && cached.length) setLines(cached);
+      if (active && cached.length) replaceLines(cached);
       try {
         const response = await fetch("/api/cart", { credentials: "same-origin", cache: "no-store" });
         const serverCart = await response.json();
@@ -80,7 +126,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           });
           items = migrated.items;
         }
-        if (active) setLines(items);
+        if (active) replaceLines(items);
       } catch (loadError) {
         if (active) setError(loadError instanceof Error ? loadError.message : "تعذر تحميل السلة");
       } finally {
@@ -97,47 +143,96 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [lines, ready]);
 
-  async function mutate(action: string, payload: Record<string, unknown> = {}) {
+  async function mutate(
+    action: string,
+    payload: Record<string, unknown> = {},
+    optimisticallyUpdate: (current: Line[]) => Line[] = (current) => current,
+  ) {
+    if (mutationInFlight.current) throw new Error("CART_BUSY");
+    const eventStartedAt = performance.now();
+    mutationInFlight.current = true;
+    setMutating(true);
+    const previousLines = linesRef.current;
     setError("");
-    const data = await requestCart(action, payload);
-    setLines(data.items);
+    pendingRender.current = { phase: "optimistic", startedAt: performance.now() };
+    replaceLines(optimisticallyUpdate(previousLines));
+    try {
+      const data = await requestCart(action, payload, eventStartedAt);
+      pendingRender.current = { phase: "confirmed", startedAt: performance.now() };
+      replaceLines(data.items);
+      if (action === "add") showToast("تمت إضافة المنتج إلى السلة.");
+      else if (action === "set" && payload.quantity === 0) showToast("تم حذف المنتج من السلة.");
+      else if (action === "set") showToast("تم تحديث كمية المنتج.");
+      else if (action === "refresh") showToast("تم اعتماد السعر الجديد.");
+      else if (action === "clear") showToast("تم إفراغ السلة.");
+    } catch (mutationError) {
+      pendingRender.current = { phase: "rollback", startedAt: performance.now() };
+      replaceLines(previousLines);
+      setError(mutationError instanceof Error ? mutationError.message : "تعذر تحديث السلة");
+      throw mutationError;
+    } finally {
+      mutationInFlight.current = false;
+      setMutating(false);
+    }
   }
 
-  const add = async (product: Pick<Line, "id">) => {
-    try { await mutate("add", { productId: product.id }); }
-    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : "تعذر تحديث السلة"); throw mutationError; }
+  const add = async (product: Pick<Line, "id" | "name" | "price"> & Partial<Pick<Line, "stock" | "image">>) => {
+    await mutate("add", { productId: product.id }, (current) => {
+      const existing = current.find((line) => line.id === product.id);
+      if (existing) {
+        return current.map((line) => line.id === product.id
+          ? { ...line, qty: line.qty + 1, currentPrice: product.price, priceChanged: line.price !== product.price }
+          : line);
+      }
+      return [...current, {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        currentPrice: product.price,
+        stock: product.stock,
+        image: product.image,
+        qty: 1,
+        available: true,
+        priceChanged: false,
+      }];
+    });
   };
   const set = async (id: string, quantity: number) => {
-    try { await mutate("set", { productId: id, quantity }); }
-    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : "تعذر تحديث السلة"); throw mutationError; }
+    await mutate("set", { productId: id, quantity }, (current) => quantity === 0
+      ? current.filter((line) => line.id !== id)
+      : current.map((line) => line.id === id ? { ...line, qty: quantity } : line));
   };
   const refresh = async (id: string) => {
-    try { await mutate("refresh", { productId: id }); }
-    catch (mutationError) { setError(mutationError instanceof Error ? mutationError.message : "تعذر تحديث السلة"); throw mutationError; }
+    await mutate("refresh", { productId: id }, (current) => current.map((line) => line.id === id
+      ? { ...line, price: line.currentPrice ?? line.price, priceChanged: false }
+      : line));
   };
   const reload = async () => {
     setError("");
     const response = await fetch("/api/cart", { credentials: "same-origin", cache: "no-store" });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "تعذر تحميل السلة");
-    setLines(data.items ?? []);
+    replaceLines(data.items ?? []);
   };
-  const clear = async () => {
-    try { await mutate("clear"); }
-    catch (mutationError) { setLines([]); setError(mutationError instanceof Error ? mutationError.message : "تعذر تحديث السلة"); }
+  const clear = async () => mutate("clear", {}, () => []);
+  const clearLocal = () => {
+    replaceLines([]);
+    setError("");
   };
 
   const value = useMemo(() => ({
     lines,
+    mutating,
     add,
     set,
     refresh,
     reload,
     clear,
+    clearLocal,
     count: lines.reduce((sum, line) => sum + line.qty, 0),
     total: lines.reduce((sum, line) => sum + line.qty * line.price, 0),
     error,
-  }), [lines, error]);
+  }), [lines, mutating, error]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

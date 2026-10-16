@@ -5,14 +5,18 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCart } from "@/lib/cart";
 import Field from "@/components/ui/Field";
+import LoadingButton from "@/components/ui/LoadingButton";
+import { useToast } from "@/components/ui/ToastProvider";
 import { money } from "@/lib/settings";
 
 type DeliveryZone = { id: string; name: string; fee: string };
+type CustomerDetails = { name: string; city: string; address: string };
 
 const RETRY_KEY = "baraa-checkout-idempotency-key";
 
-export default function CheckoutForm({ deliveryZones }: { deliveryZones: DeliveryZone[] }) {
-  const { lines, clear, reload, total } = useCart();
+export default function CheckoutForm({ deliveryZones, initialDetails }: { deliveryZones: DeliveryZone[]; initialDetails?: CustomerDetails }) {
+  const { lines, clearLocal, reload, total } = useCart();
+  const { showToast } = useToast();
   const router = useRouter();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -50,7 +54,8 @@ export default function CheckoutForm({ deliveryZones }: { deliveryZones: Deliver
         return;
       }
       sessionStorage.removeItem(RETRY_KEY);
-      await clear();
+      clearLocal();
+      showToast("تم تأكيد طلبك بنجاح.");
       router.push("/ar/orders");
     } catch {
       setError("تعذر الاتصال بالمتجر. يمكنك المحاولة مرة أخرى.");
@@ -62,9 +67,13 @@ export default function CheckoutForm({ deliveryZones }: { deliveryZones: Deliver
   return (
     <form className="f checkout-form" onSubmit={submit}>
       <h2>إتمام الطلب</h2>
-      <Field label="الاسم" name="name" maxLength={120} required />
+      <Field label="الاسم" name="name" maxLength={120} defaultValue={initialDetails?.name} autoComplete="name" required />
       <Field label="رقم الهاتف" name="phone" type="tel" maxLength={32} required />
-      <Field label="العنوان بالتفصيل" name="address" maxLength={500} required />
+      <Field label="المدينة" name="city" maxLength={120} defaultValue={initialDetails?.city} autoComplete="address-level2" required />
+      <label className="checkout-zone-field">
+        <span>العنوان بالتفصيل</span>
+        <textarea name="address" maxLength={500} defaultValue={initialDetails?.address} autoComplete="street-address" rows={3} required />
+      </label>
       <label className="checkout-zone-field">
         <span>منطقة التوصيل</span>
         <select name="deliveryZoneId" value={deliveryZoneId} onChange={(event) => setDeliveryZoneId(event.target.value)} required>
@@ -86,7 +95,14 @@ export default function CheckoutForm({ deliveryZones }: { deliveryZones: Deliver
       </div>
       {error && <p role="alert" style={{ color: "crimson" }}>{error}</p>}
       {lines.some((line) => line.priceChanged) && <p role="alert" style={{ color: "crimson" }}>تغيّر سعر منتج في السلة. <Link href="/ar/cart">راجعي السلة واعتمدي السعر الجديد</Link>.</p>}
-      <button className="btn" disabled={!lines.length || !selectedZone || submitting || lines.some((line) => line.priceChanged)}>{submitting ? "جارٍ إرسال الطلب" : "تأكيد الطلب"}</button>
+      <LoadingButton
+        className="btn"
+        disabled={!lines.length || !selectedZone || lines.some((line) => line.priceChanged)}
+        loading={submitting}
+        pendingText="جارٍ إرسال الطلب..."
+      >
+        تأكيد الطلب
+      </LoadingButton>
     </form>
   );
 }

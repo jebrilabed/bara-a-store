@@ -1,5 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import Link from "next/link";
+import LoadingButton from "@/components/ui/LoadingButton";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { writeAdminAudit } from "@/lib/admin/audit";
 import { Bell, BellRing, Check, CheckCheck, Inbox, Package } from "lucide-react";
@@ -55,10 +57,10 @@ export default async function NotificationsPage({ searchParams }: { searchParams
         </div>
         {unreadCount > 0 && (
           <form action={markAllRead}>
-            <button className="notifications-mark-all" type="submit">
+            <LoadingButton className="notifications-mark-all" type="submit" pendingText="جارٍ التحديث...">
               <CheckCheck size={17} />
               <span>تحديد الكل كمقروء</span>
-            </button>
+            </LoadingButton>
           </form>
         )}
       </header>
@@ -75,12 +77,12 @@ export default async function NotificationsPage({ searchParams }: { searchParams
       </div>
 
       <nav className="notifications-filters" aria-label="تصفية الإشعارات">
-        <a href="/admin/notifications" className={!unreadOnly ? "is-selected" : undefined} aria-current={!unreadOnly ? "page" : undefined}>
+        <Link href="/admin/notifications" className={!unreadOnly ? "is-selected" : undefined} aria-current={!unreadOnly ? "page" : undefined}>
           الكل <span>{totalCount}</span>
-        </a>
-        <a href="/admin/notifications?filter=unread" className={unreadOnly ? "is-selected" : undefined} aria-current={unreadOnly ? "page" : undefined}>
+        </Link>
+        <Link href="/admin/notifications?filter=unread" className={unreadOnly ? "is-selected" : undefined} aria-current={unreadOnly ? "page" : undefined}>
           غير مقروءة <span>{unreadCount}</span>
-        </a>
+        </Link>
       </nav>
 
       {notifications.length === 0 ? (
@@ -109,10 +111,10 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                 ) : (
                   <form action={markRead}>
                     <input type="hidden" name="id" value={notification.id} />
-                    <button className="notification-item__action" type="submit" aria-label="تحديد الإشعار كمقروء">
+                    <LoadingButton className="notification-item__action" type="submit" aria-label="تحديد الإشعار كمقروء" pendingText="جارٍ...">
                       <Check size={16} />
                       <span>مقروء</span>
-                    </button>
+                    </LoadingButton>
                   </form>
                 )}
               </li>

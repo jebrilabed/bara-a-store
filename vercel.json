@@ -1,1 +1,1 @@
-{"framework":"nextjs","buildCommand":"npx prisma generate && npx next build apps/web"}
+{"framework":"nextjs","buildCommand":"npx prisma generate && npx next build apps/web","regions":["hnd1"]}

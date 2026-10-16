@@ -3,6 +3,68 @@ import type { Prisma } from "@/generated/prisma";
 
 export const CART_COOKIE_NAME = "baraa_cart";
 const CART_LIFETIME_DAYS = 30;
+const cartItemsInclude = {
+  items: {
+    include: {
+      product: { select: { id: true, name: true, price: true, stock: true, image: true, active: true } },
+    },
+  },
+} as const;
+
+type LockedCartRow = {
+  cartId: string;
+  itemId: string | null;
+  itemProductId: string | null;
+  quantity: number | null;
+  priceSnapshot: Prisma.Decimal | null;
+  productId: string | null;
+  productName: string | null;
+  productPrice: Prisma.Decimal | null;
+  productStock: number | null;
+  productImage: string | null;
+  productActive: boolean | null;
+  targetProductId: string | null;
+  targetProductName: string | null;
+  targetProductPrice: Prisma.Decimal | null;
+  targetProductStock: number | null;
+  targetProductImage: string | null;
+  targetProductActive: boolean | null;
+};
+
+function lockedCartResult(rows: LockedCartRow[], guestToken: string | null, clearGuestCookie: boolean) {
+  const items = rows.flatMap((row) => row.itemId && row.itemProductId && row.productId && row.quantity !== null && row.priceSnapshot
+    ? [{
+        id: row.itemId,
+        productId: row.itemProductId,
+        quantity: row.quantity,
+        priceSnapshot: row.priceSnapshot,
+        product: {
+          id: row.productId,
+          name: row.productName ?? "",
+          price: row.productPrice ?? row.priceSnapshot,
+          stock: row.productStock ?? 0,
+          image: row.productImage,
+          active: row.productActive ?? false,
+        },
+      }]
+    : []);
+  return {
+    cart: { id: rows[0].cartId, items },
+    targetProduct: rows[0].targetProductId
+      ? {
+          id: rows[0].targetProductId,
+          name: rows[0].targetProductName ?? "",
+          price: rows[0].targetProductPrice!,
+          stock: rows[0].targetProductStock ?? 0,
+          image: rows[0].targetProductImage,
+          active: rows[0].targetProductActive ?? false,
+        }
+      : null,
+    guestToken,
+    clearGuestCookie,
+    locked: true,
+  };
+}
 
 export function newCartToken() {
   return randomBytes(32).toString("base64url");
@@ -24,34 +86,113 @@ export async function getOrCreateActiveCart(
   tx: Prisma.TransactionClient,
   userId: string | null,
   suppliedGuestToken: string | null,
+  includeItems = true,
+  lockExisting = false,
+  requestedProductId: string | null = null,
 ) {
   const now = new Date();
-  if (userId) {
-    await tx.cart.updateMany({
-      where: { userId, status: "ACTIVE", expiresAt: { lte: now } },
-      data: { status: "ABANDONED" },
-    });
+  const guestToken = validCartToken(suppliedGuestToken) ? suppliedGuestToken : null;
+  if (lockExisting && !includeItems && userId && !guestToken) {
+    const rows = await tx.$queryRaw<LockedCartRow[]>`
+      WITH locked_cart AS MATERIALIZED (
+        SELECT "id" FROM "Cart"
+        WHERE "userId" = ${userId}
+          AND "status" = 'ACTIVE'
+          AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
+        ORDER BY "createdAt" ASC
+        LIMIT 1
+        FOR UPDATE
+      )
+      SELECT
+        locked_cart."id" AS "cartId",
+        item."id" AS "itemId",
+        item."productId" AS "itemProductId",
+        item."quantity" AS "quantity",
+        item."priceSnapshot" AS "priceSnapshot",
+        product."id" AS "productId",
+        product."name" AS "productName",
+        product."price" AS "productPrice",
+        product."stock" AS "productStock",
+        product."image" AS "productImage",
+        product."active" AS "productActive",
+        target_product."id" AS "targetProductId",
+        target_product."name" AS "targetProductName",
+        target_product."price" AS "targetProductPrice",
+        target_product."stock" AS "targetProductStock",
+        target_product."image" AS "targetProductImage",
+        target_product."active" AS "targetProductActive"
+      FROM locked_cart
+      LEFT JOIN "CartItem" item ON item."cartId" = locked_cart."id"
+      LEFT JOIN "Product" product ON product."id" = item."productId"
+      LEFT JOIN "Product" target_product ON target_product."id" = ${requestedProductId}
+    `;
+    if (rows.length) return lockedCartResult(rows, null, true);
+  } else if (lockExisting && !includeItems && !userId && guestToken) {
+    const tokenHash = hashCartToken(guestToken);
+    const rows = await tx.$queryRaw<LockedCartRow[]>`
+      WITH locked_cart AS MATERIALIZED (
+        SELECT "id" FROM "Cart"
+        WHERE "guestTokenHash" = ${tokenHash}
+          AND "status" = 'ACTIVE'
+          AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
+        LIMIT 1
+        FOR UPDATE
+      )
+      SELECT
+        locked_cart."id" AS "cartId",
+        item."id" AS "itemId",
+        item."productId" AS "itemProductId",
+        item."quantity" AS "quantity",
+        item."priceSnapshot" AS "priceSnapshot",
+        product."id" AS "productId",
+        product."name" AS "productName",
+        product."price" AS "productPrice",
+        product."stock" AS "productStock",
+        product."image" AS "productImage",
+        product."active" AS "productActive",
+        target_product."id" AS "targetProductId",
+        target_product."name" AS "targetProductName",
+        target_product."price" AS "targetProductPrice",
+        target_product."stock" AS "targetProductStock",
+        target_product."image" AS "targetProductImage",
+        target_product."active" AS "targetProductActive"
+      FROM locked_cart
+      LEFT JOIN "CartItem" item ON item."cartId" = locked_cart."id"
+      LEFT JOIN "Product" product ON product."id" = item."productId"
+      LEFT JOIN "Product" target_product ON target_product."id" = ${requestedProductId}
+    `;
+    if (rows.length) return lockedCartResult(rows, guestToken, false);
   }
-  let guestToken = validCartToken(suppliedGuestToken) ? suppliedGuestToken : null;
-  let guestCart = guestToken
-    ? await tx.cart.findUnique({ where: { guestTokenHash: hashCartToken(guestToken) }, include: { items: true } })
+
+  let resolvedGuestToken = guestToken;
+  let guestCart = resolvedGuestToken
+    ? await tx.cart.findUnique({
+        where: { guestTokenHash: hashCartToken(resolvedGuestToken) },
+        include: includeItems ? cartItemsInclude : undefined,
+      })
     : null;
 
   if (guestCart && guestCart.status === "ACTIVE" && guestCart.expiresAt && guestCart.expiresAt <= now) {
     await tx.cart.update({ where: { id: guestCart.id }, data: { status: "ABANDONED" } });
     guestCart = null;
-    guestToken = null;
+    resolvedGuestToken = null;
   } else if (guestCart && guestCart.status !== "ACTIVE") {
     guestCart = null;
-    guestToken = null;
+    resolvedGuestToken = null;
   }
 
   if (userId) {
     let userCart = await tx.cart.findFirst({
       where: { userId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-      include: { items: { include: { product: true } } },
+      include: includeItems ? cartItemsInclude : undefined,
       orderBy: { createdAt: "asc" },
     });
+    if (!userCart) {
+      await tx.cart.updateMany({
+        where: { userId, status: "ACTIVE", expiresAt: { lte: now } },
+        data: { status: "ABANDONED" },
+      });
+    }
 
     if (guestCart && guestCart.userId !== userId) {
       await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${guestCart.id} FOR UPDATE`;
@@ -59,7 +200,7 @@ export async function getOrCreateActiveCart(
         userCart = await tx.cart.update({
           where: { id: guestCart.id },
           data: { userId, guestTokenHash: null, expiresAt: expiryDate() },
-          include: { items: { include: { product: true } } },
+          include: includeItems ? cartItemsInclude : undefined,
         });
       } else {
         await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${userCart.id} FOR UPDATE`;
@@ -83,7 +224,7 @@ export async function getOrCreateActiveCart(
         await tx.cart.update({ where: { id: guestCart.id }, data: { status: "ABANDONED" } });
         userCart = await tx.cart.findUniqueOrThrow({
           where: { id: userCart.id },
-          include: { items: { include: { product: true } } },
+          include: includeItems ? cartItemsInclude : undefined,
         });
       }
     }
@@ -91,25 +232,22 @@ export async function getOrCreateActiveCart(
     if (!userCart) {
       userCart = await tx.cart.create({
         data: { userId, expiresAt: expiryDate() },
-        include: { items: { include: { product: true } } },
+        include: includeItems ? cartItemsInclude : undefined,
       });
     }
-    return { cart: userCart, guestToken: null, clearGuestCookie: true };
+    return { cart: userCart, targetProduct: null, guestToken: null, clearGuestCookie: true, locked: false };
   }
 
-  if (!guestToken) guestToken = newCartToken();
-  const tokenHash = hashCartToken(guestToken);
-  let cart = guestCart ?? await tx.cart.findUnique({
-    where: { guestTokenHash: tokenHash },
-    include: { items: { include: { product: true } } },
-  });
+  if (!resolvedGuestToken) resolvedGuestToken = newCartToken();
+  const tokenHash = hashCartToken(resolvedGuestToken);
+  let cart = guestCart;
 
   if (!cart) {
     cart = await tx.cart.create({
       data: { guestTokenHash: tokenHash, expiresAt: expiryDate() },
-      include: { items: { include: { product: true } } },
+      include: includeItems ? cartItemsInclude : undefined,
     });
   }
 
-  return { cart, guestToken, clearGuestCookie: false };
+  return { cart, targetProduct: null, guestToken: resolvedGuestToken, clearGuestCookie: false, locked: false };
 }

@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import LoadingButton from "@/components/ui/LoadingButton";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { InputError } from "@/lib/backend-policy.mjs";
 import { writeAdminAudit } from "@/lib/admin/audit";
 import { money } from "@/lib/settings";
 import { Plus, Package, Pencil, Power } from "lucide-react";
 import DeleteProductForm from "@/components/admin/DeleteProductForm";
+import { revalidatePublicCatalog } from "@/lib/storefront/catalog";
 
 export const dynamic = "force-dynamic";
 const PRODUCTS_PER_PAGE = 10;
@@ -29,6 +32,8 @@ async function setProductActive(fd: FormData) {
   revalidatePath("/ar");
   revalidatePath("/ar/products");
   revalidatePath("/api/products");
+  revalidatePublicCatalog();
+  redirect(`/admin/products?toast=product-${active ? "activated" : "deactivated"}`);
 }
 
 async function deleteProduct(fd: FormData) {
@@ -49,20 +54,50 @@ async function deleteProduct(fd: FormData) {
   revalidatePath("/ar");
   revalidatePath("/ar/products");
   revalidatePath("/api/products");
+  revalidatePublicCatalog();
+  redirect("/admin/products?toast=product-deleted");
 }
 
 export default async function ProductsPage({ searchParams }: { searchParams?: { status?: string; page?: string } }) {
   const requestedPage = Number(searchParams?.page);
   const safePage = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const totalProducts = await db.product.count();
+  const [totalProducts, firstPageProducts] = await Promise.all([
+    db.product.count(),
+    db.product.findMany({
+      select: {
+        id: true,
+        image: true,
+        name: true,
+        category: { select: { name: true } },
+        price: true,
+        compareAtPrice: true,
+        stock: true,
+        active: true,
+      },
+      orderBy: { id: "desc" },
+      skip: (safePage - 1) * PRODUCTS_PER_PAGE,
+      take: PRODUCTS_PER_PAGE,
+    }),
+  ]);
   const totalPages = Math.max(1, Math.ceil(totalProducts / PRODUCTS_PER_PAGE));
   const currentPage = Math.min(safePage, totalPages);
-  const products = await db.product.findMany({
-    include: { category: true },
-    orderBy: { id: "desc" },
-    skip: (currentPage - 1) * PRODUCTS_PER_PAGE,
-    take: PRODUCTS_PER_PAGE,
-  });
+  const products = currentPage === safePage
+    ? firstPageProducts
+    : await db.product.findMany({
+        select: {
+          id: true,
+          image: true,
+          name: true,
+          category: { select: { name: true } },
+          price: true,
+          compareAtPrice: true,
+          stock: true,
+          active: true,
+        },
+        orderBy: { id: "desc" },
+        skip: (currentPage - 1) * PRODUCTS_PER_PAGE,
+        take: PRODUCTS_PER_PAGE,
+      });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -166,7 +201,7 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
         <>
         <div style={{ background: "#fff", borderRadius: "20px", border: "1px solid var(--line)", overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,0.02)" }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "start" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--mist)", borderBottom: "1px solid var(--line)" }}>
                   <th style={{ padding: "14px 18px", fontWeight: 800, color: "var(--rose-d)" }}>الصورة</th>
@@ -235,10 +270,10 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
                         <form action={setProductActive}>
                           <input type="hidden" name="id" value={product.id} />
                           <input type="hidden" name="active" value={String(!product.active)} />
-                          <button type="submit" className={`product-action${product.active ? " product-action--pause" : " product-action--activate"}`}>
+                          <LoadingButton type="submit" className={`product-action${product.active ? " product-action--pause" : " product-action--activate"}`} pendingText="جارٍ...">
                             <Power size={14} />
                             <span>{product.active ? "إيقاف" : "تفعيل"}</span>
-                          </button>
+                          </LoadingButton>
                         </form>
                         <DeleteProductForm id={product.id} action={deleteProduct} />
                       </div>

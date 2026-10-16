@@ -2,9 +2,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import LoadingButton from "@/components/ui/LoadingButton";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { InputError, makeSlug } from "@/lib/backend-policy.mjs";
 import { writeAdminAudit } from "@/lib/admin/audit";
+import { revalidatePublicCatalog } from "@/lib/storefront/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +50,8 @@ async function createCategory(fd: FormData) {
   revalidatePath("/admin/categories");
   revalidatePath("/ar");
   revalidatePath("/ar/categories");
-  redirect("/admin/categories?status=created");
+  revalidatePublicCatalog();
+  redirect("/admin/categories?toast=category-created");
 }
 
 export default function NewCategoryPage() {
@@ -121,13 +124,14 @@ export default function NewCategoryPage() {
             >
               إلغاء
             </Link>
-            <button
+            <LoadingButton
               type="submit"
               className="btn"
+              pendingText="جارٍ إضافة القسم..."
               style={{ padding: "12px 36px", borderRadius: "14px", fontSize: "1rem" }}
             >
               إضافة التصنيف
-            </button>
+            </LoadingButton>
           </div>
         </form>
       </div>

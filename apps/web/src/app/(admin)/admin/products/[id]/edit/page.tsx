@@ -2,10 +2,14 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
+import LoadingButton from "@/components/ui/LoadingButton";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { InputError, parseProductInput } from "@/lib/backend-policy.mjs";
 import { writeAdminAudit } from "@/lib/admin/audit";
 import { uploadProductImage } from "@/lib/cloudinary";
+import { revalidatePublicCatalog } from "@/lib/storefront/catalog";
+import ProductImageField from "@/components/admin/ProductImageField";
+import ProductFeaturesField from "@/components/admin/ProductFeaturesField";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +37,7 @@ async function updateProduct(fd: FormData) {
         price: input.price,
         compareAtPrice: input.compareAtPrice,
         stock: input.stock,
+        features: input.features,
         image: image ?? undefined,
         category: { connect: { id: categoryId } },
       },
@@ -44,7 +49,8 @@ async function updateProduct(fd: FormData) {
   revalidatePath("/ar");
   revalidatePath("/ar/products");
   revalidatePath("/api/products");
-  redirect("/admin/products?status=updated");
+  revalidatePublicCatalog();
+  redirect("/admin/products?toast=product-updated");
 }
 
 export default async function EditProductPage({ params }: { params: { id: string } }) {
@@ -99,18 +105,13 @@ export default async function EditProductPage({ params }: { params: { id: string
           </select>
         </label>
 
-        <div style={{ display: "grid", gap: "10px" }}>
-          <label style={{ display: "grid", gap: "6px", fontWeight: 700 }}>
-            تغيير صورة المنتج
-            <input name="image" type="file" accept="image/jpeg,image/png,image/webp" />
-          </label>
-          <small style={{ color: "var(--soft)" }}>اتركي الحقل فارغًا للاحتفاظ بالصورة الحالية. JPG أو PNG أو WebP، بحد أقصى 5 ميجابايت.</small>
-          {product.image && <img src={product.image} alt={product.name} style={{ width: "112px", height: "112px", objectFit: "cover", borderRadius: "8px" }} />}
-        </div>
+        <ProductFeaturesField initialFeatures={product.features} />
+
+        <ProductImageField initialImage={product.image} helpText="اتركي الحقل فارغًا للاحتفاظ بالصورة الحالية. JPG أو PNG أو WebP، بحد أقصى 5 ميجابايت." />
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "16px", borderTop: "1px solid #eceeea" }}>
           <Link href="/admin/products" className="btn o">إلغاء</Link>
-          <button type="submit" className="btn">حفظ التعديلات</button>
+          <LoadingButton type="submit" className="btn" pendingText="جارٍ حفظ التعديلات...">حفظ التعديلات</LoadingButton>
         </div>
       </form>
     </section>

@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { InputError } from "@/lib/backend-policy.mjs";
 import { writeAdminAudit } from "@/lib/admin/audit";
 import { Plus, Tags, Pencil } from "lucide-react";
 import DeleteCategoryForm from "@/components/admin/DeleteCategoryForm";
+import { revalidatePublicCatalog } from "@/lib/storefront/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,8 @@ async function deleteCategory(fd: FormData) {
   revalidatePath("/admin/categories");
   revalidatePath("/ar");
   revalidatePath("/ar/categories");
+  revalidatePublicCatalog();
+  redirect("/admin/categories?toast=category-deleted");
 }
 
 export default async function CategoriesPage({ searchParams }: { searchParams?: { status?: string } }) {
@@ -131,7 +135,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams?: 
       ) : (
         <div style={{ background: "#fff", borderRadius: "20px", border: "1px solid var(--line)", overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,0.02)" }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "start" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--mist)", borderBottom: "1px solid var(--line)" }}>
                   <th style={{ padding: "14px 18px", fontWeight: 800, color: "var(--rose-d)" }}>عنوان التصنيف</th>
@@ -169,7 +173,7 @@ export default async function CategoriesPage({ searchParams }: { searchParams?: 
                         </Link>
                         <DeleteCategoryForm id={c.id} action={deleteCategory} disabled={c._count.products > 0} />
                         {c._count.products > 0 && (
-                          <small className="category-delete-hint">انقلي المنتجات أو احذفيها أولًا</small>
+                          <small className="category-delete-hint">لا يمكن حذفه لارتباطه بمنتجات</small>
                         )}
                       </div>
                     </td>

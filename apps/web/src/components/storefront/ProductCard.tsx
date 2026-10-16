@@ -1,14 +1,15 @@
 import Link from "next/link";
 import AddToCart from "./AddToCart";
+import "./ProductCard.css";
 import { money } from "@/lib/settings";
 
 export default function ProductCard({ p }: { p: any }) {
   const hasDiscount = p.compareAtPrice && Number(p.compareAtPrice) > Number(p.price);
 
   return (
-    <article className="card">
-      <Link href={`/ar/products/${encodeURIComponent(p.slug)}`} className="pic" style={{ position: "relative" }}>
-        <img src={p.image || "/logo.png"} alt={p.name} />
+    <article className="card product-card">
+      <Link href={`/ar/products/${encodeURIComponent(p.slug)}`} className="pic product-card__image-link" style={{ position: "relative" }}>
+        <img className={p.image ? "product-card-image" : "product-card-image product-card-image--placeholder"} src={p.image || "/logo.png"} alt={p.name} />
         {hasDiscount && (
           <span
             style={{
@@ -27,9 +28,9 @@ export default function ProductCard({ p }: { p: any }) {
           </span>
         )}
       </Link>
-      <div className="in">
-        <b>{p.name}</b>
-        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+      <div className="in product-card__content">
+        <b className="product-card__name">{p.name}</b>
+        <div className="product-card__price">
           <span className="price">{money(p.price)}</span>
           {hasDiscount && (
             <span style={{ textDecoration: "line-through", color: "var(--soft)", fontSize: "0.85rem" }}>
@@ -37,7 +38,9 @@ export default function ProductCard({ p }: { p: any }) {
             </span>
           )}
         </div>
-        <AddToCart id={p.id} name={p.name} price={p.price} stock={p.stock} />
+        <div className="product-card__footer">
+          <AddToCart id={p.id} name={p.name} price={p.price} stock={p.stock} />
+        </div>
       </div>
     </article>
   );

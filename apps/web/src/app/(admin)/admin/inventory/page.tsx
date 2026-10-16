@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import LoadingButton from "@/components/ui/LoadingButton";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { InputError } from "@/lib/backend-policy.mjs";
 import { writeAdminAudit } from "@/lib/admin/audit";
+import { revalidatePublicCatalog } from "@/lib/storefront/catalog";
 import { ClipboardList, TriangleAlert } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,7 @@ async function updateInventory(fd: FormData) {
   revalidatePath("/admin/inventory");
   revalidatePath("/admin/products");
   revalidatePath("/ar/products");
+  revalidatePublicCatalog();
 }
 
 export default async function InventoryPage() {
@@ -78,10 +81,11 @@ export default async function InventoryPage() {
       ) : (
         <div style={{ background: "#fff", borderRadius: "20px", border: "1px solid var(--line)", overflow: "hidden", boxShadow: "0 4px 16px rgba(0,0,0,0.02)" }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "start" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--mist)", borderBottom: "1px solid var(--line)" }}>
-                  <th style={{ padding: "14px 18px", fontWeight: 800, color: "var(--rose-d)" }}>المنتج</th>
+                  <th style={{ padding: "14px 18px", fontWeight: 800, color: "var(--rose-d)" }}>الصورة</th>
+                  <th style={{ padding: "14px 18px", fontWeight: 800, color: "var(--rose-d)" }}>اسم المنتج</th>
                   <th style={{ padding: "14px 18px", fontWeight: 800, color: "var(--rose-d)" }}>الكمية الحالية</th>
                   <th style={{ padding: "14px 18px", fontWeight: 800, color: "var(--rose-d)" }}>الحالة</th>
                   <th style={{ padding: "14px 18px", fontWeight: 800, color: "var(--rose-d)" }}>تعديل الكمية</th>
@@ -95,21 +99,14 @@ export default async function InventoryPage() {
                   return (
                     <tr key={product.id} style={{ borderBottom: "1px solid var(--line)" }}>
                       <td style={{ padding: "14px 18px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                          <img
-                            src={product.image || "/logo.png"}
-                            alt={product.name}
-                            style={{ width: "40px", height: "40px", borderRadius: "10px", objectFit: "cover", background: "var(--mist)" }}
-                          />
-                          <div>
-                            <div style={{ fontWeight: 800 }}>{product.name}</div>
-                            {product.skuCode && (
-                              <div style={{ fontSize: "0.75rem", color: "var(--soft)", fontFamily: "monospace" }}>
-                                {product.skuCode}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        <img
+                          src={product.image || "/logo.png"}
+                          alt={product.name}
+                          style={{ width: "40px", height: "40px", borderRadius: "8px", objectFit: "cover", background: "var(--mist)", display: "block", marginInline: "auto" }}
+                        />
+                      </td>
+                      <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 800 }}>
+                        {product.name}
                       </td>
                       <td style={{ padding: "14px 18px", fontWeight: 800, fontSize: "1.05rem" }}>
                         {product.stock} قطعة
@@ -133,7 +130,7 @@ export default async function InventoryPage() {
                         )}
                       </td>
                       <td style={{ padding: "14px 18px" }}>
-                        <form action={updateInventory} style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        <form action={updateInventory} style={{ display: "flex", justifyContent: "center", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                           <input type="hidden" name="id" value={product.id} />
                           <input
                             name="stock"
@@ -144,13 +141,14 @@ export default async function InventoryPage() {
                             defaultValue={product.stock}
                             style={{ width: "90px", padding: "6px 10px", borderRadius: "10px" }}
                           />
-                          <button
+                          <LoadingButton
                             type="submit"
                             className="btn"
+                            pendingText="جارٍ التحديث..."
                             style={{ padding: "6px 14px", fontSize: "0.85rem", borderRadius: "10px" }}
                           >
                             تحديث
-                          </button>
+                          </LoadingButton>
                         </form>
                       </td>
                     </tr>

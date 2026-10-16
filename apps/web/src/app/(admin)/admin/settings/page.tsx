@@ -2,7 +2,10 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import LoadingButton from "@/components/ui/LoadingButton";
+import PreserveScrollForm from "@/components/admin/PreserveScrollForm";
 import { getSetting } from "@/lib/settings";
+import { revalidateStoreSettings } from "@/lib/settings";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { writeAdminAudit } from "@/lib/admin/audit";
 import {
@@ -49,14 +52,23 @@ async function saveStoreSettings(fd: FormData) {
       await tx.setting.upsert({
         where: { key: item.key },
         update: { value: item.value },
-        create: { key: item.key, value: item.value },
+        create: item,
       });
     }
-    await writeAdminAudit(tx, admin.id, "STORE_SETTINGS_BULK_UPDATED", "Setting", "store_settings");
-  });
+    await tx.adminAuditLog.create({
+      data: {
+        actorUserId: admin.id,
+        action: "STORE_SETTINGS_BULK_UPDATED",
+        entityType: "Setting",
+        entityId: "store_settings",
+      },
+    });
+  }, { maxWait: 10_000, timeout: 20_000 });
 
   revalidatePath("/admin/settings");
-  revalidatePath("/ar");
+  revalidatePath("/admin");
+  revalidatePath("/ar", "layout");
+  revalidateStoreSettings();
   redirect("/admin/settings?status=saved");
 }
 
@@ -218,7 +230,7 @@ export default async function SettingsPage({
       )}
 
       {/* Main Store Settings Form */}
-      <form action={saveStoreSettings} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      <PreserveScrollForm action={saveStoreSettings} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         {/* Section 1: Store Profile */}
         <div
           style={{
@@ -360,9 +372,10 @@ export default async function SettingsPage({
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button
+          <LoadingButton
             type="submit"
             className="btn"
+            pendingText="جارٍ حفظ الإعدادات..."
             style={{
               padding: "14px 36px",
               fontSize: "1rem",
@@ -374,9 +387,9 @@ export default async function SettingsPage({
           >
             <Save size={18} />
             <span>حفظ إعدادات المتجر</span>
-          </button>
+          </LoadingButton>
         </div>
-      </form>
+      </PreserveScrollForm>
 
       {/* Section 5: Password Change Form */}
       <div
@@ -397,7 +410,7 @@ export default async function SettingsPage({
           </h3>
         </div>
 
-        <form action={changeAdminPassword} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <PreserveScrollForm action={changeAdminPassword} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
             <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 700, fontSize: "0.9rem" }}>
               <span>كلمة المرور الحالية</span>
@@ -416,9 +429,10 @@ export default async function SettingsPage({
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
-            <button
+            <LoadingButton
               type="submit"
               className="btn o"
+              pendingText="جارٍ تحديث كلمة المرور..."
               style={{
                 padding: "12px 28px",
                 fontSize: "0.95rem",
@@ -430,9 +444,9 @@ export default async function SettingsPage({
             >
               <KeyRound size={17} />
               <span>تحديث كلمة المرور</span>
-            </button>
+            </LoadingButton>
           </div>
-        </form>
+        </PreserveScrollForm>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { DEFAULT_DELIVERY_ZONES, InputError, parseCheckoutInput, readDeliveryZon
 import { getSetting } from "@/lib/settings";
 import { deletePaymentReceipt, uploadPaymentReceipt, type UploadedReceipt } from "@/lib/cloudinary";
 import { CART_COOKIE_NAME, hashCartToken, validCartToken } from "@/lib/storefront/cart-storage";
+import { revalidatePublicCatalog } from "@/lib/storefront/catalog";
 
 export const dynamic = "force-dynamic";
 const ORDER_TOTAL_MAX = new Prisma.Decimal("9999999999.99");
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
         body = {
           name: formData.get("name"),
           phone: formData.get("phone"),
+          city: formData.get("city"),
           address: formData.get("address"),
           deliveryZoneId: formData.get("deliveryZoneId"),
           idempotencyKey: formData.get("idempotencyKey"),
@@ -90,7 +92,13 @@ export async function POST(request: NextRequest) {
       await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${candidate.id} AND "status" = 'ACTIVE' FOR UPDATE`;
       const cart = await tx.cart.findFirst({
         where: { id: candidate.id, ...ownerWhere, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
-        include: { items: { include: { product: true } } },
+        include: {
+          items: {
+            include: {
+              product: { select: { id: true, active: true, price: true, name: true, image: true, skuCode: true } },
+            },
+          },
+        },
       });
       if (!cart?.items.length) throw new Error("ORDER_EMPTY");
 
@@ -107,18 +115,18 @@ export async function POST(request: NextRequest) {
       const orderedLines = [...cart.items].sort((left, right) => left.productId.localeCompare(right.productId));
       for (const line of orderedLines) {
         if (!line.product.active) throw new Error("ORDER_UNAVAILABLE");
+        const product = line.product;
+        if (!line.priceSnapshot.equals(product.price)) throw new Error("ORDER_PRICE_CHANGED");
         const stockUpdate = await tx.product.updateMany({
-          where: { id: line.productId, active: true, stock: { gte: line.quantity } },
+          where: { id: line.productId, active: true, stock: { gte: line.quantity }, price: line.priceSnapshot },
           data: { stock: { decrement: line.quantity } },
         });
         if (stockUpdate.count !== 1) {
-          const latest = await tx.product.findUnique({ where: { id: line.productId }, select: { active: true } });
+          const latest = await tx.product.findUnique({ where: { id: line.productId }, select: { active: true, price: true } });
           if (!latest?.active) throw new Error("ORDER_UNAVAILABLE");
+          if (!line.priceSnapshot.equals(latest.price)) throw new Error("ORDER_PRICE_CHANGED");
           throw new Error("ORDER_STOCK");
         }
-        const product = await tx.product.findUnique({ where: { id: line.productId } });
-        if (!product?.active) throw new Error("ORDER_UNAVAILABLE");
-        if (!line.priceSnapshot.equals(product.price)) throw new Error("ORDER_PRICE_CHANGED");
         total = total.plus(product.price.mul(line.quantity));
         orderItems.push({
           productId: product.id,
@@ -135,6 +143,7 @@ export async function POST(request: NextRequest) {
         data: {
           name: input.name,
           phone: input.phone,
+          city: input.city,
           address: input.address,
           total,
           deliveryZone: deliveryZone.name,
@@ -155,6 +164,7 @@ export async function POST(request: NextRequest) {
       return created;
     }, { maxWait: 10_000, timeout: 20_000 });
 
+    revalidatePublicCatalog();
     return NextResponse.json({ id: order.id }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error: any) {
     if (uploadedReceipt) {

@@ -22,12 +22,22 @@ test("catalog accepts all store product families with optional product facts", (
       stock: "4",
       cat: "category-id",
       packageSize: "50 مل",
+      features: ["ترطيب عميق", "مناسب للاستخدام اليومي"],
     });
     assert.equal(product.type, type);
     assert.equal(product.packageSize, "50 مل");
+    assert.deepEqual(product.features, ["ترطيب عميق", "مناسب للاستخدام اليومي"]);
     assert.equal("color" in product, false);
     assert.equal("size" in product, false);
   }
+});
+
+test("product features are optional, trimmed and bounded", () => {
+  const base = { name: "عطر", price: "25.00", stock: "2", cat: "category-id" };
+  assert.deepEqual(parseProductInput(base).features, []);
+  assert.deepEqual(parseProductInput({ ...base, features: [" ميزة أولى ", "", "ميزة ثانية"] }).features, ["ميزة أولى", "ميزة ثانية"]);
+  assert.throws(() => parseProductInput({ ...base, features: ["x".repeat(121)] }), InputError);
+  assert.throws(() => parseProductInput({ ...base, features: Array.from({ length: 21 }, () => "ميزة") }), InputError);
 });
 
 test("catalog validation rejects unsupported types, fractional cents and unsafe image URLs", () => {
@@ -47,6 +57,7 @@ test("checkout parsing uses validated contact data and a retry key, not client p
   const checkout = parseCheckoutInput({
     name: "سارة",
     phone: "٠٥٩١٢٣٤٥٦٧",
+    city: "نابلس",
     address: "شارع رئيسي",
     deliveryZoneId: "west-bank",
     idempotencyKey: "f83f07b6-43a0-4d58-8bbb-d2f8f6f83b1a",
@@ -56,11 +67,13 @@ test("checkout parsing uses validated contact data and a retry key, not client p
   assert.deepEqual(checkout, {
     name: "سارة",
     phone: "0591234567",
+    city: "نابلس",
     address: "شارع رئيسي",
     deliveryZoneId: "west-bank",
     idempotencyKey: "f83f07b6-43a0-4d58-8bbb-d2f8f6f83b1a",
   });
-  assert.throws(() => parseCheckoutInput({ name: "سارة", phone: "0591234567", address: "عنوان", deliveryZoneId: "west-bank", idempotencyKey: "short" }), InputError);
+  assert.throws(() => parseCheckoutInput({ name: "سارة", phone: "0591234567", city: "نابلس", address: "عنوان", deliveryZoneId: "west-bank", idempotencyKey: "short" }), InputError);
+  assert.throws(() => parseCheckoutInput({ name: "سارة", phone: "0591234567", address: "عنوان", deliveryZoneId: "west-bank", idempotencyKey: "f83f07b6-43a0-4d58-8bbb-d2f8f6f83b1a" }), InputError);
 });
 
 test("delivery zones accept multiple unique named fees and reject invalid entries", () => {

@@ -1,8 +1,14 @@
 import Link from "next/link";
+import { AuthError } from "next-auth";
+import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
+import LoadingButton from "@/components/ui/LoadingButton";
 
 export default function Login({ searchParams }: { searchParams?: { error?: string } }) {
   const hasError = Boolean(searchParams?.error);
+  const errorMessage = searchParams?.error === "admin"
+    ? "هذا الحساب لا يملك صلاحية دخول لوحة الإدارة. سجّلي الدخول بحساب إداري."
+    : "البريد الإلكتروني أو كلمة المرور غير صحيحة. يُرجى المحاولة مجدداً.";
 
   return (
     <main className="wrap" style={{ minHeight: "80vh", display: "grid", placeItems: "center", padding: "40px 20px" }}>
@@ -44,18 +50,23 @@ export default function Login({ searchParams }: { searchParams?: { error?: strin
               fontWeight: 600,
             }}
           >
-            البريد الإلكتروني أو كلمة المرور غير صحيحة. يُرجى المحاولة مجدداً.
+            {errorMessage}
           </div>
         )}
 
         <form
           action={async (fd: FormData) => {
             "use server";
-            await signIn("credentials", {
-              email: fd.get("email"),
-              password: fd.get("password"),
-              redirectTo: "/ar/account",
-            });
+            try {
+              await signIn("credentials", {
+                email: fd.get("email"),
+                password: fd.get("password"),
+                redirectTo: "/ar/account",
+              });
+            } catch (error) {
+              if (error instanceof AuthError) redirect("/ar/login?error=invalid");
+              throw error;
+            }
           }}
           style={{ display: "flex", flexDirection: "column", gap: "18px" }}
         >
@@ -83,9 +94,10 @@ export default function Login({ searchParams }: { searchParams?: { error?: strin
             />
           </label>
 
-          <button
+          <LoadingButton
             type="submit"
             className="btn"
+            pendingText="جارٍ تسجيل الدخول..."
             style={{
               width: "100%",
               padding: "14px",
@@ -98,7 +110,7 @@ export default function Login({ searchParams }: { searchParams?: { error?: strin
             }}
           >
             تسجيل الدخول
-          </button>
+          </LoadingButton>
         </form>
 
         <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--line)", textAlign: "center", fontSize: "0.95rem", color: "var(--soft)" }}>
