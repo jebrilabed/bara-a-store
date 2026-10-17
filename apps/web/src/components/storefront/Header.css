@@ -22,7 +22,7 @@
 @media(max-width:760px){.store-nav{display:none}.header-actions{gap:7px}.header-actions .header-cart{margin-inline-start:0}.header-account,.header-cart,.header-wishlist{width:40px;height:40px}.header-login{min-height:38px;padding:7px 9px;font-size:.8rem}}
 @media(max-width:420px){.header-actions{gap:5px}.header-login{gap:5px;padding-inline:8px}.header-account,.header-cart,.header-wishlist{width:36px;height:36px}.top .brand{gap:5px;font-size:.94rem}.top .brand img{width:34px;height:34px}}
 @media(prefers-reduced-motion:reduce){.store-nav a,.header-account,.header-login,.header-cart,.header-wishlist{transition:none}}
-.header-admin-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:7px 14px;border:1px solid #1e293b;border-radius:20px;background:#0f172a;color:#fff;font-size:.82rem;font-weight:700;white-space:nowrap;transition:background-color .16s ease,transform .16s ease,color .16s ease}
-.header-admin-btn:hover{background:#1e293b;color:#38bdf8;transform:translateY(-1px)}
-.mobile-store-menu__admin{display:flex;align-items:center;margin-top:6px;padding:12px;border:1px solid #1e293b;border-radius:7px;background:#0f172a;color:#fff;font-weight:700;transition:background-color .16s ease,color .16s ease}
-.mobile-store-menu__admin:hover{background:#1e293b;color:#38bdf8}
+.header-admin-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:7px 15px;border:1px solid var(--rose-d);border-radius:20px;background:linear-gradient(135deg,var(--rose-d) 0%,#7d343e 100%);color:#fff;font-size:.82rem;font-weight:800;white-space:nowrap;box-shadow:0 2px 8px rgba(158,74,85,.22);transition:all .16s ease}
+.header-admin-btn:hover{background:linear-gradient(135deg,#853b45 0%,#662730 100%);border-color:#853b45;color:#fff;transform:translateY(-1px);box-shadow:0 4px 12px rgba(158,74,85,.32)}
+.mobile-store-menu__admin{display:flex;align-items:center;margin-top:6px;padding:12px;border:1px solid var(--rose-d);border-radius:7px;background:linear-gradient(135deg,var(--rose-d) 0%,#7d343e 100%);color:#fff;font-weight:800;transition:background-color .16s ease,border-color .16s ease}
+.mobile-store-menu__admin:hover{background:#853b45;border-color:#853b45}
