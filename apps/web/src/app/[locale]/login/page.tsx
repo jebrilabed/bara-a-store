@@ -1,12 +1,22 @@
 import Link from "next/link";
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
-import { signIn } from "@/auth";
+import { auth, signIn } from "@/auth";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { getSetting } from "@/lib/settings";
 import { db } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function Login({ searchParams }: { searchParams?: { error?: string; callbackUrl?: string } }) {
+  const session: any = await auth();
+  if (session?.user) {
+    if (session.user.role === "ADMIN") {
+      redirect("/admin");
+    }
+    redirect(searchParams?.callbackUrl || "/ar/account");
+  }
+
   const storeName = await getSetting("store_name", "متجر براعة");
   const hasError = Boolean(searchParams?.error);
   const callbackUrl = searchParams?.callbackUrl;
@@ -81,15 +91,12 @@ export default async function Login({ searchParams }: { searchParams?: { error?:
               });
             } catch (error) {
               // NEXT_REDIRECT is a special internal Next.js error — always re-throw it
-              if ((error as { digest?: string })?.digest?.startsWith?.("NEXT_REDIRECT")) throw error;
+              if ((error as { digest?: string })?.digest?.includes?.("NEXT_REDIRECT")) throw error;
 
-              if (error instanceof AuthError) {
-                const redirectPath = callbackUrl
-                  ? `/ar/login?error=invalid&callbackUrl=${encodeURIComponent(callbackUrl)}`
-                  : "/ar/login?error=invalid";
-                redirect(redirectPath);
-              }
-              throw error;
+              const redirectPath = callbackUrl
+                ? `/ar/login?error=invalid&callbackUrl=${encodeURIComponent(callbackUrl)}`
+                : "/ar/login?error=invalid";
+              redirect(redirectPath);
             }
           }}
           style={{ display: "flex", flexDirection: "column", gap: "18px" }}
@@ -139,7 +146,7 @@ export default async function Login({ searchParams }: { searchParams?: { error?:
 
         <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--line)", textAlign: "center", fontSize: "0.95rem", color: "var(--soft)" }}>
           ليس لديكِ حساب بعد؟{" "}
-          <Link href="/ar/register" style={{ color: "var(--rose-d)", fontWeight: 800, textDecoration: "underline" }}>
+          <Link href={callbackUrl ? `/ar/register?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/ar/register"} style={{ color: "var(--rose-d)", fontWeight: 800, textDecoration: "underline" }}>
             إنشاء حساب جديد
           </Link>
         </div>

@@ -9,6 +9,9 @@ import NavigationProgress from "@/components/ui/NavigationProgress";
 import ToastProvider from "@/components/ui/ToastProvider";
 import { getSetting } from "@/lib/settings";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function A({ children }: { children: React.ReactNode }) {
   const [user, storeName] = await Promise.all([
     getCurrentUser(),
