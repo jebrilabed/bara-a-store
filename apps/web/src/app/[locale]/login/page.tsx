@@ -5,10 +5,12 @@ import { signIn } from "@/auth";
 import LoadingButton from "@/components/ui/LoadingButton";
 
 import { getSetting } from "@/lib/settings";
+import { db } from "@/lib/db";
 
-export default async function Login({ searchParams }: { searchParams?: { error?: string } }) {
+export default async function Login({ searchParams }: { searchParams?: { error?: string; callbackUrl?: string } }) {
   const storeName = await getSetting("store_name", "متجر براعة");
   const hasError = Boolean(searchParams?.error);
+  const callbackUrl = searchParams?.callbackUrl;
   const errorMessage = searchParams?.error === "admin"
     ? "هذا الحساب لا يملك صلاحية دخول لوحة الإدارة. سجّلي الدخول بحساب إداري."
     : "البريد الإلكتروني أو كلمة المرور غير صحيحة. يُرجى المحاولة مجدداً.";
@@ -60,14 +62,33 @@ export default async function Login({ searchParams }: { searchParams?: { error?:
         <form
           action={async (fd: FormData) => {
             "use server";
+            const email = String(fd.get("email") ?? "").trim().toLowerCase();
+            const password = String(fd.get("password") ?? "");
+
+            let targetUrl = callbackUrl || "/ar/account";
+            if (!callbackUrl) {
+              const existingUser = await db.user.findFirst({
+                where: { email: { equals: email, mode: "insensitive" } },
+                select: { role: true },
+              });
+              if (existingUser?.role === "ADMIN") {
+                targetUrl = "/admin";
+              }
+            }
+
             try {
               await signIn("credentials", {
-                email: fd.get("email"),
-                password: fd.get("password"),
-                redirectTo: "/ar/account",
+                email,
+                password,
+                redirectTo: targetUrl,
               });
             } catch (error) {
-              if (error instanceof AuthError) redirect("/ar/login?error=invalid");
+              if (error instanceof AuthError) {
+                const redirectPath = callbackUrl
+                  ? `/ar/login?error=invalid&callbackUrl=${encodeURIComponent(callbackUrl)}`
+                  : "/ar/login?error=invalid";
+                redirect(redirectPath);
+              }
               throw error;
             }
           }}

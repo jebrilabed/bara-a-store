@@ -13,7 +13,8 @@ export default async function A({ children }: { children: React.ReactNode }) {
     getCurrentUser(),
     getSetting("store_name", "متجر براعة"),
   ]);
-  if (user?.role !== "ADMIN") redirect("/ar/login");
+  if (!user) redirect("/ar/login?callbackUrl=/admin");
+  if (user.role !== "ADMIN") redirect("/ar/login?error=admin");
   return (
     <html lang="ar" dir="rtl">
       <body className={cairo.className}>
