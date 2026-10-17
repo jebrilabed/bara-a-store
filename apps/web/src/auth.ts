@@ -20,6 +20,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = await db.user.findFirst({
           where: { email: { equals: email, mode: "insensitive" } },
+          select: { id: true, name: true, email: true, password: true, role: true },
         });
         if (!user || !["CUSTOMER", "ADMIN"].includes(user.role)) return null;
 
