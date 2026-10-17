@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/authorization";
 import { cairo } from "@/lib/font";
 import AdminNav from "@/components/admin/AdminNav";
+import AdminSignOut from "@/components/admin/AdminSignOut";
 import NavigationProgress from "@/components/ui/NavigationProgress";
 import ToastProvider from "@/components/ui/ToastProvider";
 import { getSetting } from "@/lib/settings";
@@ -23,7 +24,7 @@ export default async function A({ children }: { children: React.ReactNode }) {
             <NavigationProgress />
           </Suspense>
           <div className="adm">
-            <AdminNav storeName={storeName} />
+            <AdminNav storeName={storeName} signOutSlot={<AdminSignOut />} />
             <main>{children}</main>
           </div>
         </ToastProvider>

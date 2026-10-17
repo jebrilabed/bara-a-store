@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -23,7 +24,7 @@ const NAV_ITEMS = [
   { href: "/admin/settings", label: "الإعدادات", icon: Settings },
 ];
 
-export default function AdminNav({ storeName = "متجر براعة" }: { storeName?: string }) {
+export default function AdminNav({ storeName = "متجر براعة", signOutSlot }: { storeName?: string; signOutSlot?: ReactNode }) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -69,6 +70,7 @@ export default function AdminNav({ storeName = "متجر براعة" }: { storeN
           <ExternalLink size={15} />
           <span>زيارة المتجر</span>
         </Link>
+        {signOutSlot}
       </div>
     </aside>
   );
