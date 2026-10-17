@@ -18,7 +18,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   NEW: { label: "جديد", color: "#1D4ED8", bg: "#EFF6FF" },
   PREPARING: { label: "قيد التجهيز", color: "#B45309", bg: "#FFFBEB" },
   SHIPPED: { label: "تم الشحن", color: "#6D28D9", bg: "#F5F3FF" },
-  DONE: { label: "مكتمل", color: "#15803D", bg: "#F0FDF4" },
+  DONE: { label: "تم التسليم", color: "#15803D", bg: "#F0FDF4" },
   CANCELLED: { label: "ملغي", color: "#B91C1C", bg: "#FEF2F2" },
 };
 
@@ -254,7 +254,7 @@ export default async function OrdersPage({ searchParams }: { searchParams?: { pa
                 {orders.map((order) => {
                   const orderRecord = order as any;
                   const paymentStatus = String(orderRecord.paymentStatus || "PENDING");
-                  const availableStatuses = ["NEW", "PREPARING", "SHIPPED", "DONE"].filter(
+                  const availableStatuses = ["NEW", "PREPARING", "DONE", "CANCELLED"].filter(
                     (status) => canTransitionOrder(order.status, status),
                   );
                   const statusOptions = [...new Set([order.status, ...availableStatuses])].map((status) => ({
@@ -307,9 +307,6 @@ export default async function OrdersPage({ searchParams }: { searchParams?: { pa
                       <td style={{ padding: "14px 18px" }}>
                         <OrderRowActions
                           id={order.id}
-                          status={order.status}
-                          canCancel={order.status !== "CANCELLED" && canTransitionOrder(order.status, "CANCELLED")}
-                          changeStatus={changeStatus}
                           deleteOrder={deleteOrder}
                         />
                       </td>

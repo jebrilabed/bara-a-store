@@ -112,7 +112,9 @@ test("delivery settings migrate legacy text lines when read", () => {
 
 test("order state changes follow the explicit transition graph", () => {
   assert.equal(canTransitionOrder("NEW", "PREPARING"), true);
+  assert.equal(canTransitionOrder("NEW", "DONE"), true);
   assert.equal(canTransitionOrder("PREPARING", "CANCELLED"), true);
+  assert.equal(canTransitionOrder("PREPARING", "DONE"), true);
   assert.equal(canTransitionOrder("SHIPPED", "CANCELLED"), false);
   assert.equal(canTransitionOrder("DONE", "PREPARING"), false);
   assert.equal(canTransitionOrder("UNKNOWN", "DONE"), false);

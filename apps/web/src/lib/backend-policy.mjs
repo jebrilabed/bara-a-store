@@ -13,8 +13,8 @@ export const DEFAULT_DELIVERY_ZONES = Object.freeze([
 ]);
 
 export const ORDER_TRANSITIONS = Object.freeze({
-  NEW: ["PREPARING", "CANCELLED"],
-  PREPARING: ["SHIPPED", "CANCELLED"],
+  NEW: ["PREPARING", "DONE", "CANCELLED"],
+  PREPARING: ["SHIPPED", "DONE", "CANCELLED"],
   SHIPPED: ["DONE"],
   DONE: [],
   CANCELLED: [],
