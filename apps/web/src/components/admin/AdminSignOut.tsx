@@ -1,40 +1,40 @@
-import { signOut } from "@/auth";
-import { LogOut } from "lucide-react";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+"use client";
+
+import { useState } from "react";
+import { LogOut, LoaderCircle } from "lucide-react";
+import { adminSignOutAction } from "./adminSignOutAction";
 
 export default function AdminSignOut() {
+  const [loading, setLoading] = useState(false);
+
+  async function handleSignOut(e: React.FormEvent) {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    try {
+      await adminSignOutAction();
+    } catch {
+      // ignore
+    }
+    // Hard navigate to completely reset the client router and root layout
+    window.location.href = "/ar/login";
+  }
+
   return (
-    <form
-      action={async () => {
-        "use server";
-        try {
-          await signOut({ redirect: false });
-        } catch {
-          // ignore
-        }
-        const cookieStore = await cookies();
-        const allCookies = cookieStore.getAll();
-        for (const cookie of allCookies) {
-          if (
-            cookie.name.includes("session-token") ||
-            cookie.name.includes("authjs") ||
-            cookie.name.includes("next-auth")
-          ) {
-            cookieStore.delete(cookie.name);
-          }
-        }
-        redirect("/ar/login");
-      }}
-    >
+    <form onSubmit={handleSignOut}>
       <button
         type="submit"
         className="admin-signout-btn"
         title="تسجيل الخروج"
         aria-label="تسجيل الخروج"
+        disabled={loading}
       >
-        <LogOut size={15} aria-hidden="true" />
-        <span>تسجيل الخروج</span>
+        {loading ? (
+          <LoaderCircle size={15} className="loading-button__spinner" aria-hidden="true" />
+        ) : (
+          <LogOut size={15} aria-hidden="true" />
+        )}
+        <span>{loading ? "جارٍ الخروج..." : "تسجيل الخروج"}</span>
       </button>
     </form>
   );

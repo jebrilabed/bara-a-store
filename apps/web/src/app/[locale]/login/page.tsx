@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
-import { auth, signIn } from "@/auth";
-import LoadingButton from "@/components/ui/LoadingButton";
+import { auth } from "@/auth";
 import { getSetting } from "@/lib/settings";
-import { db } from "@/lib/db";
+import LoginForm from "./LoginForm";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +16,12 @@ export default async function Login({ searchParams }: { searchParams?: { error?:
   }
 
   const storeName = await getSetting("store_name", "متجر براعة");
-  const hasError = Boolean(searchParams?.error);
   const callbackUrl = searchParams?.callbackUrl;
-  const errorMessage = searchParams?.error === "admin"
+  const initialError = searchParams?.error === "admin"
     ? "هذا الحساب لا يملك صلاحية دخول لوحة الإدارة. سجّلي الدخول بحساب إداري."
-    : "البريد الإلكتروني أو كلمة المرور غير صحيحة. يُرجى المحاولة مجدداً.";
+    : searchParams?.error
+    ? "البريد الإلكتروني أو كلمة المرور غير صحيحة. يُرجى المحاولة مجدداً."
+    : undefined;
 
   return (
     <main className="wrap" style={{ minHeight: "80vh", display: "grid", placeItems: "center", padding: "40px 20px" }}>
@@ -49,100 +48,7 @@ export default async function Login({ searchParams }: { searchParams?: { error?:
           </p>
         </div>
 
-        {hasError && (
-          <div
-            role="alert"
-            style={{
-              background: "#FFF0F0",
-              border: "1px solid #FFD0D0",
-              color: "#C23333",
-              padding: "12px 16px",
-              borderRadius: "14px",
-              fontSize: "0.9rem",
-              marginBottom: "20px",
-              textAlign: "center",
-              fontWeight: 600,
-            }}
-          >
-            {errorMessage}
-          </div>
-        )}
-
-        <form
-          action={async (fd: FormData) => {
-            "use server";
-            const email = String(fd.get("email") ?? "").trim().toLowerCase();
-            const password = String(fd.get("password") ?? "");
-
-            let destination = callbackUrl;
-            if (!destination) {
-              const u = await db.user.findFirst({
-                where: { email: { equals: email, mode: "insensitive" } },
-                select: { role: true },
-              });
-              destination = u?.role === "ADMIN" ? "/admin" : "/ar/account";
-            }
-
-            try {
-              await signIn("credentials", {
-                email,
-                password,
-                redirectTo: destination,
-              });
-            } catch (error) {
-              // NEXT_REDIRECT is a special internal Next.js error — always re-throw it
-              if ((error as { digest?: string })?.digest?.includes?.("NEXT_REDIRECT")) throw error;
-
-              const redirectPath = callbackUrl
-                ? `/ar/login?error=invalid&callbackUrl=${encodeURIComponent(callbackUrl)}`
-                : "/ar/login?error=invalid";
-              redirect(redirectPath);
-            }
-          }}
-          style={{ display: "flex", flexDirection: "column", gap: "18px" }}
-        >
-          <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 700, fontSize: "0.95rem" }}>
-            <span>البريد الإلكتروني</span>
-            <input
-              name="email"
-              type="email"
-              placeholder="example@mail.com"
-              required
-              autoComplete="email"
-              style={{ width: "100%", padding: "12px 16px", borderRadius: "14px", border: "1.5px solid var(--line)", outline: "none" }}
-            />
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 700, fontSize: "0.95rem" }}>
-            <span>كلمة المرور</span>
-            <input
-              name="password"
-              type="password"
-              placeholder="••••••••"
-              required
-              autoComplete="current-password"
-              style={{ width: "100%", padding: "12px 16px", borderRadius: "14px", border: "1.5px solid var(--line)", outline: "none" }}
-            />
-          </label>
-
-          <LoadingButton
-            type="submit"
-            className="btn"
-            pendingText="جارٍ تسجيل الدخول..."
-            style={{
-              width: "100%",
-              padding: "14px",
-              fontSize: "1rem",
-              marginTop: "8px",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              borderRadius: "16px",
-            }}
-          >
-            تسجيل الدخول
-          </LoadingButton>
-        </form>
+        <LoginForm callbackUrl={callbackUrl} initialError={initialError} />
 
         <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid var(--line)", textAlign: "center", fontSize: "0.95rem", color: "var(--soft)" }}>
           ليس لديكِ حساب بعد؟{" "}

@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { ArrowLeft, LogOut, PackageCheck, ShoppingBag, UserRound } from "lucide-react";
+import AccountSignOutButton from "./AccountSignOutButton";
+
 export default async function A() {
   const s: any = await auth();
   if (!s) redirect("/ar/login");
@@ -38,12 +40,7 @@ export default async function A() {
         )}
       </nav>
 
-      <form className="account-signout" action={async () => { "use server"; await signOut({ redirectTo: "/ar" }); }}>
-        <LoadingButton className="account-signout__button" pendingText="جارٍ تسجيل الخروج...">
-          <LogOut size={17} aria-hidden="true" />
-          <span>تسجيل الخروج</span>
-        </LoadingButton>
-      </form>
+      <AccountSignOutButton />
     </main>
   );
 }
