@@ -33,7 +33,9 @@ export default function ProductCard({ p }: { p: any }) {
         <FavoriteButton product={p} variant="floating" />
       </div>
       <div className="in product-card__content">
-        <b className="product-card__name">{p.name}</b>
+        <Link href={`/ar/products/${encodeURIComponent(p.slug)}`} style={{ textDecoration: "none", color: "inherit" }}>
+          <b className="product-card__name">{p.name}</b>
+        </Link>
         <div className="product-card__price">
           <span className="price">{money(p.price)}</span>
           {hasDiscount && (

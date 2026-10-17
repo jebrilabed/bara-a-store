@@ -85,10 +85,43 @@ export const getStorefrontCategories = unstable_cache(
   cacheOptions,
 );
 
+function getSlugVariants(rawSlug: string): string[] {
+  const variants = new Set<string>();
+  if (!rawSlug) return [];
+
+  const trimmed = String(rawSlug).trim();
+  variants.add(trimmed);
+
+  try {
+    const decodedOnce = decodeURIComponent(trimmed);
+    variants.add(decodedOnce);
+    variants.add(decodedOnce.normalize("NFKC"));
+    variants.add(decodedOnce.normalize("NFC"));
+
+    try {
+      const decodedTwice = decodeURIComponent(decodedOnce);
+      variants.add(decodedTwice);
+      variants.add(decodedTwice.normalize("NFKC"));
+      variants.add(decodedTwice.normalize("NFC"));
+    } catch {}
+  } catch {}
+
+  variants.add(trimmed.normalize("NFKC"));
+  variants.add(trimmed.normalize("NFC"));
+
+  return Array.from(variants).filter(Boolean);
+}
+
 export const getStorefrontCategoryPage = unstable_cache(async (slug: string, page: number) => {
   const pageSize = 24;
-  const category = await db.category.findUnique({
-    where: { slug },
+  const variants = getSlugVariants(slug);
+  const category = await db.category.findFirst({
+    where: {
+      OR: [
+        ...variants.map((v) => ({ slug: { equals: v, mode: "insensitive" as const } })),
+        { id: slug },
+      ],
+    },
     select: {
       id: true,
       name: true,
@@ -113,9 +146,18 @@ export const getStorefrontCategoryPage = unstable_cache(async (slug: string, pag
   };
 }, ["storefront-category-page-v1"], cacheOptions);
 
-export const getStorefrontProduct = unstable_cache(async (slug: string) => {
+export async function getStorefrontProduct(slugOrId: string) {
+  if (!slugOrId) return null;
+  const variants = getSlugVariants(slugOrId);
+
   const product = await db.product.findFirst({
-    where: { slug, active: true },
+    where: {
+      OR: [
+        ...variants.map((v) => ({ slug: { equals: v, mode: "insensitive" as const } })),
+        { id: slugOrId },
+      ],
+      active: true,
+    },
     select: {
       id: true,
       slug: true,
@@ -147,7 +189,7 @@ export const getStorefrontProduct = unstable_cache(async (slug: string) => {
         compareAtPrice: product.compareAtPrice ? Number(product.compareAtPrice.toString()) : null,
       }
     : null;
-}, ["storefront-product-v1"], cacheOptions);
+}
 
 export function revalidatePublicCatalog() {
   revalidateTag(PUBLIC_CATALOG_TAG);
