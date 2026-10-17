@@ -97,12 +97,9 @@ async function changePaymentStatus(fd: FormData) {
 
   await db.$transaction(async (tx) => {
     await tx.order.update({ where: { id }, data: { paymentStatus: nextPaymentStatus } });
-    await writeAdminAudit(tx, {
-      actorUserId: admin.id,
-      action: "ORDER_PAYMENT_STATUS_CHANGED",
-      entityType: "Order",
-      entityId: id,
-      metadata: { from: order.paymentStatus, to: nextPaymentStatus },
+    await writeAdminAudit(tx, admin.id, "ORDER_PAYMENT_STATUS_CHANGED", "Order", id, {
+      from: order.paymentStatus,
+      to: nextPaymentStatus,
     });
   });
 
@@ -128,7 +125,7 @@ async function deleteOrder(fd: FormData) {
     if (restoreStock) {
       for (const item of order.items) {
         if (!item.productId) continue;
-        await tx.product.update({ where: { id: item.productId }, data: { stock: { increment: item.qty } });
+        await tx.product.update({ where: { id: item.productId }, data: { stock: { increment: item.qty } } });
       }
     }
 
