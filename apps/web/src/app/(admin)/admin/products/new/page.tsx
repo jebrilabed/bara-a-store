@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import LoadingButton from "@/components/ui/LoadingButton";
-import type { ProductType } from "@/generated/prisma";
+import type { ProductType } from "@prisma/client";
 import { requireAdmin } from "@/lib/auth/authorization";
 import { InputError, parseProductInput } from "@/lib/backend-policy.mjs";
 import { writeAdminAudit } from "@/lib/admin/audit";

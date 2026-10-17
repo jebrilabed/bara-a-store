@@ -1,4 +1,4 @@
-import { PrismaClient } from "@/generated/prisma";
+import { PrismaClient } from "@prisma/client";
 const g = globalThis as unknown as {
 	db?: PrismaClient;
 	cartPerfListenerAttached?: boolean;

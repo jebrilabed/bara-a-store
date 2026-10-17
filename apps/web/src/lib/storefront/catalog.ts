@@ -1,5 +1,5 @@
 import { unstable_cache, revalidateTag } from "next/cache";
-import { Prisma } from "@/generated/prisma";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
 export const PUBLIC_CATALOG_TAG = "public-catalog";

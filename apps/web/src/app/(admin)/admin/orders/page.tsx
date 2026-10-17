@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Prisma } from "@/generated/prisma";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { requireAdmin } from "@/lib/auth/authorization";

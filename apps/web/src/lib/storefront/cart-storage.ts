@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "node:crypto";
-import type { Prisma } from "@/generated/prisma";
+import type { Prisma } from "@prisma/client";
 
 export const CART_COOKIE_NAME = "baraa_cart";
 export const CART_RESERVATION_MINUTES = 15;
