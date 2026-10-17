@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { getSetting } from "@/lib/settings";
+import { db } from "@/lib/db";
 
 export default async function Login({ searchParams }: { searchParams?: { error?: string; callbackUrl?: string } }) {
   const storeName = await getSetting("store_name", "متجر براعة");
@@ -63,11 +64,20 @@ export default async function Login({ searchParams }: { searchParams?: { error?:
             const email = String(fd.get("email") ?? "").trim().toLowerCase();
             const password = String(fd.get("password") ?? "");
 
+            let destination = callbackUrl;
+            if (!destination) {
+              const u = await db.user.findFirst({
+                where: { email: { equals: email, mode: "insensitive" } },
+                select: { role: true },
+              });
+              destination = u?.role === "ADMIN" ? "/admin" : "/ar/account";
+            }
+
             try {
               await signIn("credentials", {
                 email,
                 password,
-                redirectTo: callbackUrl || "/ar/account",
+                redirectTo: destination,
               });
             } catch (error) {
               // NEXT_REDIRECT is a special internal Next.js error — always re-throw it
