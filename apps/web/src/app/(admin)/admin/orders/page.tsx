@@ -29,6 +29,7 @@ const orderListSelect = {
   city: true,
   address: true,
   total: true,
+  paymentMethod: true,
   deliveryZone: true,
   deliveryFee: true,
   receiptPublicId: true,
@@ -198,6 +199,9 @@ export default async function OrdersPage({ searchParams }: { searchParams?: { pa
                       <td style={{ padding: "14px 18px", fontSize: "0.9rem", maxWidth: "200px" }}>
                         {order.city && <div style={{ fontWeight: 700 }}>{order.city}</div>}
                         <div>{order.address}</div>
+                        <div style={{ marginTop: "5px", color: order.paymentMethod === "BANK_TRANSFER" ? "#317144" : "var(--soft)", fontSize: "0.8rem", fontWeight: 700 }}>
+                          {order.paymentMethod === "BANK_TRANSFER" ? "تحويل بنكي" : "الدفع عند التوصيل"}
+                        </div>
                         {order.deliveryZone && (
                           <div style={{ marginTop: "5px", color: "var(--soft)", fontSize: "0.8rem" }}>
                             التوصيل إلى {order.deliveryZone} · {money(order.deliveryFee)}

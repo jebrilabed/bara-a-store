@@ -49,7 +49,6 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
           <p className="price">{p.price} ₪</p>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <AddToCart id={p.id} name={p.name} price={p.price} stock={p.stock} quantitySelector />
-            <FavoriteButton product={p} variant="inline" />
           </div>
         </div>
       </div>

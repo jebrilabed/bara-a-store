@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type PaymentMethod } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth/authorization";
@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
           city: formData.get("city"),
           address: formData.get("address"),
           deliveryZoneId: formData.get("deliveryZoneId"),
+          paymentMethod: formData.get("paymentMethod"),
           idempotencyKey: formData.get("idempotencyKey"),
         };
         receiptFile = formData.get("receipt");
@@ -56,9 +57,9 @@ export async function POST(request: NextRequest) {
     const input = parseCheckoutInput(body);
     retryKey = input.idempotencyKey;
     const user = await getCurrentUser();
+    if (!user) throw new InputError("يجب تسجيل الدخول لإتمام الطلب", 401);
     const guestToken = request.cookies.get(CART_COOKIE_NAME)?.value;
-    const guestTokenHash = !user && validCartToken(guestToken) ? hashCartToken(guestToken) : null;
-    if (!user && !guestTokenHash) throw new InputError("انتهت صلاحية السلة. أعيدي تحميل صفحة السلة ثم حاولي مرة أخرى", 409);
+    const guestTokenHash = validCartToken(guestToken) ? hashCartToken(guestToken) : null;
 
     matchesOwner = (order: { userId: string | null; guestTokenHash: string | null }) =>
       user ? order.userId === user.id : order.userId === null && order.guestTokenHash === guestTokenHash;
@@ -74,8 +75,23 @@ export async function POST(request: NextRequest) {
     const deliveryZonesValue = await getSetting("delivery_zones", JSON.stringify(DEFAULT_DELIVERY_ZONES));
     const deliveryZone = readDeliveryZones(deliveryZonesValue).find((zone) => zone.id === input.deliveryZoneId);
     if (!deliveryZone) throw new InputError("منطقة التوصيل المختارة غير متاحة، حدّثي الصفحة واختاري منطقة أخرى", 409);
+    if (input.paymentMethod === "BANK_TRANSFER") {
+      const [bankName, bankBeneficiary, bankIban] = await Promise.all([
+        getSetting("bank_name", ""),
+        getSetting("bank_beneficiary", ""),
+        getSetting("bank_iban", ""),
+      ]);
+      if (!bankName.trim() || !bankBeneficiary.trim() || !bankIban.trim()) {
+        throw new InputError("التحويل البنكي غير متاح حالياً. تواصلي مع المتجر لاختيار طريقة دفع أخرى", 409);
+      }
+      if (!receiptFile || typeof receiptFile === "string" || receiptFile.size === 0) {
+        throw new InputError("يرجى إرفاق إيصال التحويل لإتمام الطلب");
+      }
+    }
     const deliveryFee = new Prisma.Decimal(deliveryZone.fee);
-    uploadedReceipt = await uploadPaymentReceipt(receiptFile);
+    if (input.paymentMethod === "BANK_TRANSFER") {
+      uploadedReceipt = await uploadPaymentReceipt(receiptFile);
+    }
 
     const order = await db.$transaction(async (tx) => {
       const ownerWhere = user
@@ -150,6 +166,7 @@ export async function POST(request: NextRequest) {
           city: input.city,
           address: input.address,
           total,
+          paymentMethod: input.paymentMethod as PaymentMethod,
           deliveryZone: deliveryZone.name,
           deliveryFee,
           receiptPublicId: uploadedReceipt?.publicId ?? null,

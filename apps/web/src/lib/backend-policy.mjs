@@ -147,11 +147,15 @@ export function parseCheckoutInput(source) {
   if (!/^[A-Za-z0-9_-]{1,100}$/.test(deliveryZoneId)) {
     throw new InputError("اختاري منطقة توصيل صالحة");
   }
+  const paymentMethod = valueOf(source, "paymentMethod") || "CASH_ON_DELIVERY";
+  if (!["CASH_ON_DELIVERY", "BANK_TRANSFER"].includes(paymentMethod)) {
+    throw new InputError("اختاري طريقة دفع صالحة");
+  }
   const idempotencyKey = valueOf(source, "idempotencyKey");
   if (!/^[A-Za-z0-9._:-]{24,120}$/.test(idempotencyKey)) {
     throw new InputError("تعذر تأكيد محاولة الطلب. أعيدي تحميل الصفحة وحاولي مرة أخرى");
   }
-  return { name, phone, city, address, deliveryZoneId, idempotencyKey };
+  return { name, phone, city, address, deliveryZoneId, paymentMethod, idempotencyKey };
 }
 
 export function parseDeliveryZones(value) {

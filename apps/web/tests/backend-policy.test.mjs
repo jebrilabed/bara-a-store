@@ -60,6 +60,7 @@ test("checkout parsing uses validated contact data and a retry key, not client p
     city: "نابلس",
     address: "شارع رئيسي",
     deliveryZoneId: "west-bank",
+    paymentMethod: "CASH_ON_DELIVERY",
     idempotencyKey: "f83f07b6-43a0-4d58-8bbb-d2f8f6f83b1a",
     total: 0.01,
     items: [{ id: "untrusted", qty: 99 }],
@@ -70,8 +71,19 @@ test("checkout parsing uses validated contact data and a retry key, not client p
     city: "نابلس",
     address: "شارع رئيسي",
     deliveryZoneId: "west-bank",
+    paymentMethod: "CASH_ON_DELIVERY",
     idempotencyKey: "f83f07b6-43a0-4d58-8bbb-d2f8f6f83b1a",
   });
+  assert.equal(parseCheckoutInput({
+    name: "سارة",
+    phone: "0591234567",
+    city: "نابلس",
+    address: "عنوان",
+    deliveryZoneId: "west-bank",
+    paymentMethod: "BANK_TRANSFER",
+    idempotencyKey: "f83f07b6-43a0-4d58-8bbb-d2f8f6f83b1a",
+  }).paymentMethod, "BANK_TRANSFER");
+  assert.throws(() => parseCheckoutInput({ name: "سارة", phone: "0591234567", city: "نابلس", address: "عنوان", deliveryZoneId: "west-bank", paymentMethod: "CARD", idempotencyKey: "f83f07b6-43a0-4d58-8bbb-d2f8f6f83b1a" }), InputError);
   assert.throws(() => parseCheckoutInput({ name: "سارة", phone: "0591234567", city: "نابلس", address: "عنوان", deliveryZoneId: "west-bank", idempotencyKey: "short" }), InputError);
   assert.throws(() => parseCheckoutInput({ name: "سارة", phone: "0591234567", address: "عنوان", deliveryZoneId: "west-bank", idempotencyKey: "f83f07b6-43a0-4d58-8bbb-d2f8f6f83b1a" }), InputError);
 });

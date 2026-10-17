@@ -5,14 +5,25 @@ import { signIn } from "@/auth";
 import { db } from "@/lib/db";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { getSetting } from "@/lib/settings";
+import { normalizePhone } from "@/lib/backend-policy.mjs";
 
 async function register(fd: FormData) {
   "use server";
   const name = String(fd.get("name") ?? "").trim();
   const email = String(fd.get("email") ?? "").trim().toLowerCase();
+  let phone: string;
+  try {
+    phone = normalizePhone(fd.get("phone"));
+  } catch {
+    redirect("/ar/register?error=invalid");
+  }
   const password = String(fd.get("password") ?? "");
   const city = String(fd.get("city") ?? "").trim();
   const address = String(fd.get("address") ?? "").trim();
+  const requestedCallback = String(fd.get("callbackUrl") ?? "");
+  const redirectTo = requestedCallback.startsWith("/ar/") && !requestedCallback.startsWith("//")
+    ? requestedCallback
+    : "/ar/account";
 
   if (
     !name ||
@@ -42,6 +53,7 @@ async function register(fd: FormData) {
         email,
         password: await bcrypt.hash(password, 12),
         role: "CUSTOMER",
+        phone,
         city,
         address,
       },
@@ -50,16 +62,16 @@ async function register(fd: FormData) {
     if (error?.code === "P2002") redirect("/ar/register?error=exists");
     throw error;
   }
-  await signIn("credentials", { email, password, redirectTo: "/ar/account" });
+  await signIn("credentials", { email, password, redirectTo });
 }
 
-export default async function Register({ searchParams }: { searchParams?: { error?: string } }) {
+export default async function Register({ searchParams }: { searchParams?: { error?: string; callbackUrl?: string } }) {
   const storeName = await getSetting("store_name", "متجر براعة");
   const message =
     searchParams?.error === "exists"
       ? "هذا البريد الإلكتروني مسجل مسبقاً. يمكنكِ تسجيل الدخول مباشرة."
       : searchParams?.error === "invalid"
-      ? "يرجى التأكد من الاسم والمدينة والعنوان والبريد، وأن كلمة المرور 8 أحرف على الأقل."
+      ? "يرجى التأكد من الاسم والهاتف والمدينة والعنوان والبريد، وأن كلمة المرور 8 أحرف على الأقل."
       : "";
 
   return (
@@ -107,6 +119,9 @@ export default async function Register({ searchParams }: { searchParams?: { erro
         )}
 
         <form action={register} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {searchParams?.callbackUrl?.startsWith("/ar/") && !searchParams.callbackUrl.startsWith("//") && (
+            <input type="hidden" name="callbackUrl" value={searchParams.callbackUrl} />
+          )}
           <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 700, fontSize: "0.95rem" }}>
             <span>الاسم الكامل</span>
             <input
@@ -115,6 +130,19 @@ export default async function Register({ searchParams }: { searchParams?: { erro
               placeholder="مثال: ريم الأحمد"
               maxLength={120}
               required
+              style={{ width: "100%", padding: "12px 16px", borderRadius: "14px", border: "1.5px solid var(--line)", outline: "none" }}
+            />
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: "6px", fontWeight: 700, fontSize: "0.95rem" }}>
+            <span>رقم الهاتف</span>
+            <input
+              name="phone"
+              type="tel"
+              placeholder="مثال: 0591234567"
+              maxLength={32}
+              required
+              autoComplete="tel"
               style={{ width: "100%", padding: "12px 16px", borderRadius: "14px", border: "1.5px solid var(--line)", outline: "none" }}
             />
           </label>
