@@ -4,7 +4,9 @@ import { auth, signOut } from "@/auth";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { ArrowLeft, LogOut, PackageCheck, ShoppingBag, UserRound } from "lucide-react";
 export default async function A() {
-  const s: any = await auth(); if (!s) redirect("/ar/login");
+  const s: any = await auth();
+  if (!s) redirect("/ar/login");
+  if (s.user?.role === "ADMIN") redirect("/admin");
   return (
     <main className="wrap account-page">
       <header className="account-header">
