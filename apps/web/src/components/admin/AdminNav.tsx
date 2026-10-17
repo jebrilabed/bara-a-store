@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -12,6 +12,8 @@ import {
   Bell,
   Settings,
   ExternalLink,
+  Menu,
+  X,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -26,6 +28,16 @@ const NAV_ITEMS = [
 
 export default function AdminNav({ storeName = "متجر براعة", signOutSlot }: { storeName?: string; signOutSlot?: ReactNode }) {
   const pathname = usePathname();
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isOpen]);
 
   const isActive = (href: string) => {
     if (href === "/admin") {
@@ -35,13 +47,43 @@ export default function AdminNav({ storeName = "متجر براعة", signOutSlo
   };
 
   return (
-    <aside className="admin-sidebar" aria-label="التنقل الرئيسي">
+    <>
+      <header className="admin-mobile-header">
+        <button
+          type="button"
+          className="admin-menu-button"
+          aria-label={isOpen ? "إغلاق قائمة لوحة التحكم" : "فتح قائمة لوحة التحكم"}
+          aria-expanded={isOpen}
+          aria-controls="admin-sidebar"
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          <Menu size={21} aria-hidden="true" />
+        </button>
+        <div className="admin-mobile-header__title">
+          <strong>{storeName}</strong>
+          <span>لوحة التحكم</span>
+        </div>
+      </header>
+
+      {isOpen && (
+        <button
+          type="button"
+          className="admin-sidebar-backdrop"
+          aria-label="إغلاق القائمة"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+
+      <aside id="admin-sidebar" className={`admin-sidebar${isOpen ? " is-open" : ""}`} aria-label="التنقل الرئيسي">
       <div className="admin-brand">
         <img src="/logo.png" width={42} height={42} alt="" />
         <div>
           <div className="admin-brand__name">{storeName}</div>
           <div className="admin-brand__caption">لوحة التحكم</div>
         </div>
+        <button type="button" className="admin-sidebar__close" aria-label="إغلاق القائمة" onClick={() => setIsOpen(false)}>
+          <X size={19} aria-hidden="true" />
+        </button>
       </div>
 
       <nav className="admin-nav">
@@ -54,6 +96,7 @@ export default function AdminNav({ storeName = "متجر براعة", signOutSlo
               href={item.href}
               className={`admin-nav__link${active ? " is-active" : ""}`}
               aria-current={active ? "page" : undefined}
+              onClick={() => setIsOpen(false)}
             >
               <Icon size={18} strokeWidth={active ? 2.5 : 2} />
               <span>{item.label}</span>
@@ -72,6 +115,7 @@ export default function AdminNav({ storeName = "متجر براعة", signOutSlo
         </Link>
         {signOutSlot}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
