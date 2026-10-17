@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { LogOut, LoaderCircle } from "lucide-react";
 import { adminSignOutAction } from "@/components/admin/adminSignOutAction";
+import { signOut } from "next-auth/react";
 
 export default function AccountSignOutButton() {
   const [loading, setLoading] = useState(false);
@@ -11,12 +12,21 @@ export default function AccountSignOutButton() {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
+
     try {
       await adminSignOutAction();
     } catch {
       // ignore
     }
-    window.location.href = "/ar";
+
+    try {
+      await signOut({ redirect: false });
+    } catch {
+      // ignore
+    }
+
+    // Hard navigate to login page to reset client router and confirm signout
+    window.location.href = "/ar/login";
   }
 
   return (

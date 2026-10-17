@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { LogOut, LoaderCircle } from "lucide-react";
 import { adminSignOutAction } from "./adminSignOutAction";
+import { signOut } from "next-auth/react";
 
 export default function AdminSignOut() {
   const [loading, setLoading] = useState(false);
@@ -13,6 +14,11 @@ export default function AdminSignOut() {
     setLoading(true);
     try {
       await adminSignOutAction();
+    } catch {
+      // ignore
+    }
+    try {
+      await signOut({ redirect: false });
     } catch {
       // ignore
     }
