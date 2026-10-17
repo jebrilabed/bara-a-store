@@ -112,14 +112,18 @@ async function changePaymentStatus(fd: FormData) {
     throw new InputError("حالة الدفع غير صالحة");
   }
 
-  const order = await db.order.findUnique({ where: { id } });
-  if (!order) throw new InputError("Order not found");
+  const raw = await db.$queryRawUnsafe<{ paymentStatus: string | null }[]>(
+    'SELECT "paymentStatus" FROM "Order" WHERE id = $1',
+    id
+  ).catch(() => []);
+  const fromStatus = raw?.[0]?.paymentStatus || "PENDING";
 
   await db.$transaction(async (tx) => {
-    await tx.order.update({
-      where: { id },
-      data: { paymentStatus: nextPaymentStatus },
-    });
+    await tx.$executeRawUnsafe(
+      'UPDATE "Order" SET "paymentStatus" = $1 WHERE id = $2',
+      nextPaymentStatus,
+      id
+    );
 
     await writeAdminAudit(
       tx,
@@ -127,7 +131,7 @@ async function changePaymentStatus(fd: FormData) {
       "ORDER_PAYMENT_STATUS_CHANGED",
       "Order",
       id,
-      { from: (order as any).paymentStatus, to: nextPaymentStatus }
+      { from: fromStatus, to: nextPaymentStatus }
     );
   });
 
@@ -138,28 +142,34 @@ async function changePaymentStatus(fd: FormData) {
 export default async function OrderDetailsPage({ params }: { params: { id: string } }) {
   await requireAdmin();
 
-  const order = await db.order.findUnique({
-    where: { id: params.id },
-    include: {
-      items: {
-        include: {
-          product: {
-            select: { id: true, name: true, slug: true, image: true, skuCode: true },
+  const [order, rawStatus] = await Promise.all([
+    db.order.findUnique({
+      where: { id: params.id },
+      include: {
+        items: {
+          include: {
+            product: {
+              select: { id: true, name: true, slug: true, image: true, skuCode: true },
+            },
           },
         },
+        user: {
+          select: { id: true, name: true, email: true },
+        },
       },
-      user: {
-        select: { id: true, name: true, email: true },
-      },
-    },
-  });
+    }),
+    db.$queryRawUnsafe<{ paymentStatus: string | null }[]>(
+      'SELECT "paymentStatus" FROM "Order" WHERE id = $1',
+      params.id
+    ).catch(() => []),
+  ]);
 
   if (!order) {
     notFound();
   }
 
   const orderRecord = order as any;
-  const paymentStatus = orderRecord.paymentStatus || "PENDING";
+  const paymentStatus = rawStatus?.[0]?.paymentStatus || orderRecord.paymentStatus || "PENDING";
   const statusInfo = ORDER_STATUS_LABELS[order.status] ?? {
     label: order.status,
     color: "#475569",

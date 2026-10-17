@@ -36,7 +36,6 @@ const orderListSelect = {
   phone: true,
   total: true,
   paymentMethod: true,
-  paymentStatus: true,
   receiptPublicId: true,
   receiptResourceType: true,
   receiptFormat: true,
@@ -92,13 +91,20 @@ async function changePaymentStatus(fd: FormData) {
     throw new InputError("حالة الدفع غير صالحة");
   }
 
-  const order = await db.order.findUnique({ where: { id }, select: { paymentStatus: true } });
-  if (!order) throw new InputError("Order was not found");
+  const raw = await db.$queryRawUnsafe<{ paymentStatus: string | null }[]>(
+    'SELECT "paymentStatus" FROM "Order" WHERE id = $1',
+    id
+  ).catch(() => []);
+  const fromStatus = raw?.[0]?.paymentStatus || "PENDING";
 
   await db.$transaction(async (tx) => {
-    await tx.order.update({ where: { id }, data: { paymentStatus: nextPaymentStatus } });
+    await tx.$executeRawUnsafe(
+      'UPDATE "Order" SET "paymentStatus" = $1 WHERE id = $2',
+      nextPaymentStatus,
+      id
+    );
     await writeAdminAudit(tx, admin.id, "ORDER_PAYMENT_STATUS_CHANGED", "Order", id, {
-      from: order.paymentStatus,
+      from: fromStatus,
       to: nextPaymentStatus,
     });
   });
@@ -161,7 +167,7 @@ async function deleteOrder(fd: FormData) {
 export default async function OrdersPage({ searchParams }: { searchParams?: { page?: string } }) {
   const requestedPage = Number(searchParams?.page);
   const safePage = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const [totalOrders, requestedOrders] = await Promise.all([
+  const [totalOrders, requestedOrders, rawPaymentStatuses] = await Promise.all([
     db.order.count(),
     db.order.findMany({
       orderBy: { createdAt: "desc" },
@@ -169,10 +175,13 @@ export default async function OrdersPage({ searchParams }: { searchParams?: { pa
       take: ORDERS_PER_PAGE,
       select: orderListSelect,
     }),
+    db.$queryRawUnsafe<{ id: string; paymentStatus: string | null }[]>(
+      'SELECT id, "paymentStatus" FROM "Order"'
+    ).catch(() => []),
   ]);
   const totalPages = Math.max(1, Math.ceil(totalOrders / ORDERS_PER_PAGE));
   const currentPage = Math.min(safePage, totalPages);
-  const orders = currentPage === safePage
+  const selectedOrders = currentPage === safePage
     ? requestedOrders
     : await db.order.findMany({
         orderBy: { createdAt: "desc" },
@@ -180,6 +189,12 @@ export default async function OrdersPage({ searchParams }: { searchParams?: { pa
         take: ORDERS_PER_PAGE,
         select: orderListSelect,
       });
+
+  const paymentStatusMap = new Map((rawPaymentStatuses || []).map((r) => [r.id, r.paymentStatus]));
+  const orders = selectedOrders.map((o) => ({
+    ...o,
+    paymentStatus: paymentStatusMap.get(o.id) || (o as any).paymentStatus || "PENDING",
+  }));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
