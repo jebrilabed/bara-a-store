@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CircleUserRound, Heart, LogIn } from "lucide-react";
+import { CircleUserRound, Heart, LayoutDashboard, LogIn } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { useWishlist } from "@/lib/wishlist";
 import "./Header.css";
@@ -11,22 +11,26 @@ import "./Header.css";
 type HeaderProps = {
   locale: string;
   isAuthenticated: boolean;
+  userRole?: string;
   storeName?: string;
 };
 
-export default function Header({ locale, isAuthenticated, storeName = "متجر براعة" }: HeaderProps) {
+export default function Header({ locale, isAuthenticated, userRole, storeName = "متجر براعة" }: HeaderProps) {
   const { count } = useCart();
   const { count: wishlistCount } = useWishlist();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
   const localePath = `/${locale}`;
-  const accountHref = isAuthenticated ? `${localePath}/account` : `${localePath}/login`;
-  const accountLabel = isAuthenticated ? "حسابي" : "تسجيل الدخول";
+  const isAdmin = isAuthenticated && userRole === "ADMIN";
+  const accountHref = isAdmin ? "/admin" : isAuthenticated ? `${localePath}/account` : `${localePath}/login`;
+  const accountLabel = isAdmin ? "لوحة التحكم" : isAuthenticated ? "حسابي" : "تسجيل الدخول";
+
   const primaryLinks = [
     { href: `${localePath}/categories`, label: "الأقسام" },
-    { href: `${localePath}/search`, label: "بحث" },
     { href: `${localePath}/products`, label: "المنتجات" },
+    { href: `${localePath}/orders`, label: "طلباتي" },
+    { href: `${localePath}/search`, label: "بحث" },
   ];
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -67,8 +71,26 @@ export default function Header({ locale, isAuthenticated, storeName = "متجر 
         </nav>
 
         <div className="header-actions">
-          {isAuthenticated ? (
-            <Link href={accountHref} className={`header-account${isActive(accountHref) ? " is-active" : ""}`} aria-label="حسابي" title="حسابي" aria-current={isActive(accountHref) ? "page" : undefined} onClick={closeMenu}>
+          {isAdmin ? (
+            <Link
+              href="/admin"
+              className="header-admin-btn"
+              title="لوحة التحكم"
+              aria-label="لوحة التحكم"
+              onClick={closeMenu}
+            >
+              <LayoutDashboard size={17} aria-hidden="true" />
+              <span>لوحة التحكم</span>
+            </Link>
+          ) : isAuthenticated ? (
+            <Link
+              href={accountHref}
+              className={`header-account${isActive(accountHref) ? " is-active" : ""}`}
+              aria-label="حسابي"
+              title="حسابي"
+              aria-current={isActive(accountHref) ? "page" : undefined}
+              onClick={closeMenu}
+            >
               <CircleUserRound size={21} aria-hidden="true" />
             </Link>
           ) : (
@@ -133,7 +155,18 @@ export default function Header({ locale, isAuthenticated, storeName = "متجر 
             const active = isActive(item.href);
             return <Link key={item.href} href={item.href} className={active ? "is-active" : undefined} aria-current={active ? "page" : undefined} onClick={closeMenu}>{item.label}</Link>;
           })}
-          <Link href={accountHref} className={`mobile-store-menu__account${isAuthenticated ? "" : " is-login"}${isActive(accountHref) ? " is-active" : ""}`} aria-current={isActive(accountHref) ? "page" : undefined} onClick={closeMenu}>{accountLabel}</Link>
+          {isAdmin ? (
+            <Link
+              href="/admin"
+              className="mobile-store-menu__admin"
+              onClick={closeMenu}
+            >
+              <LayoutDashboard size={18} style={{ marginInlineEnd: 8 }} aria-hidden="true" />
+              <span>لوحة التحكم</span>
+            </Link>
+          ) : (
+            <Link href={accountHref} className={`mobile-store-menu__account${isAuthenticated ? "" : " is-login"}${isActive(accountHref) ? " is-active" : ""}`} aria-current={isActive(accountHref) ? "page" : undefined} onClick={closeMenu}>{accountLabel}</Link>
+          )}
           <Link href={`${localePath}/wishlist`} className={isActive(`${localePath}/wishlist`) ? "is-active" : undefined} aria-current={isActive(`${localePath}/wishlist`) ? "page" : undefined} onClick={closeMenu}>المفضلة ({wishlistCount})</Link>
           <Link href={`${localePath}/cart`} className={isActive(`${localePath}/cart`) ? "is-active" : undefined} aria-current={isActive(`${localePath}/cart`) ? "page" : undefined} onClick={closeMenu}>السلة ({count})</Link>
         </nav>

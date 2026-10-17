@@ -20,7 +20,12 @@ export default async function L({ children, params }: { children: React.ReactNod
   return (
     <CartProvider>
       <WishlistProvider>
-        <Header locale={params.locale} isAuthenticated={Boolean(session?.user)} storeName={settings.store_name} />
+        <Header
+          locale={params.locale}
+          isAuthenticated={Boolean(session?.user)}
+          userRole={(session?.user as any)?.role}
+          storeName={settings.store_name}
+        />
         <main className="wrap">{children}</main>
         <Footer
           locale={params.locale}
