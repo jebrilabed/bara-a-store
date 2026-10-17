@@ -1,0 +1,71 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.button:active {
+  transform: scale(0.9);
+}
+
+.icon {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), fill 0.2s ease, color 0.2s ease;
+}
+
+.button:hover .icon {
+  transform: scale(1.15);
+}
+
+.floating {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--text, #1e293b);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 5;
+}
+
+.floating:hover {
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.floating.active {
+  background: #fff0f3;
+  color: #e11d48;
+}
+
+.inline {
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #e2e8f0);
+  background: var(--surface, #ffffff);
+  color: var(--text, #334155);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.inline:hover {
+  border-color: #f43f5e;
+  color: #e11d48;
+  background: #fff1f2;
+}
+
+.inline.active {
+  border-color: #fda4af;
+  background: #fff1f2;
+  color: #e11d48;
+}

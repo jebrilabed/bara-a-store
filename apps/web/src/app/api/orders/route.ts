@@ -78,12 +78,11 @@ export async function POST(request: NextRequest) {
     uploadedReceipt = await uploadPaymentReceipt(receiptFile);
 
     const order = await db.$transaction(async (tx) => {
-      const now = new Date();
       const ownerWhere = user
         ? { userId: user.id }
         : { guestTokenHash: guestTokenHash as string };
       const candidate = await tx.cart.findFirst({
-        where: { ...ownerWhere, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        where: { ...ownerWhere, status: "ACTIVE" },
         select: { id: true },
         orderBy: { createdAt: "asc" },
       });
@@ -91,11 +90,11 @@ export async function POST(request: NextRequest) {
 
       await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${candidate.id} AND "status" = 'ACTIVE' FOR UPDATE`;
       const cart = await tx.cart.findFirst({
-        where: { id: candidate.id, ...ownerWhere, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        where: { id: candidate.id, ...ownerWhere, status: "ACTIVE" },
         include: {
           items: {
             include: {
-              product: { select: { id: true, active: true, price: true, name: true, image: true, skuCode: true } },
+              product: { select: { id: true, active: true, price: true, name: true, image: true, skuCode: true, stock: true } },
             },
           },
         },
@@ -117,16 +116,21 @@ export async function POST(request: NextRequest) {
         if (!line.product.active) throw new Error("ORDER_UNAVAILABLE");
         const product = line.product;
         if (!line.priceSnapshot.equals(product.price)) throw new Error("ORDER_PRICE_CHANGED");
-        const stockUpdate = await tx.product.updateMany({
-          where: { id: line.productId, active: true, stock: { gte: line.quantity }, price: line.priceSnapshot },
-          data: { stock: { decrement: line.quantity } },
+
+        const updated = await tx.product.updateMany({
+          where: {
+            id: product.id,
+            active: true,
+            stock: { gte: line.quantity },
+          },
+          data: {
+            stock: { decrement: line.quantity },
+          },
         });
-        if (stockUpdate.count !== 1) {
-          const latest = await tx.product.findUnique({ where: { id: line.productId }, select: { active: true, price: true } });
-          if (!latest?.active) throw new Error("ORDER_UNAVAILABLE");
-          if (!line.priceSnapshot.equals(latest.price)) throw new Error("ORDER_PRICE_CHANGED");
+        if (updated.count === 0) {
           throw new Error("ORDER_STOCK");
         }
+
         total = total.plus(product.price.mul(line.quantity));
         orderItems.push({
           productId: product.id,

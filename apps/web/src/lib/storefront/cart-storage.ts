@@ -2,6 +2,8 @@ import { randomBytes, createHash } from "node:crypto";
 import type { Prisma } from "@/generated/prisma";
 
 export const CART_COOKIE_NAME = "baraa_cart";
+export const CART_RESERVATION_MINUTES = 15;
+export const CART_RESERVATION_MS = CART_RESERVATION_MINUTES * 60 * 1000;
 const CART_LIFETIME_DAYS = 30;
 const cartItemsInclude = {
   items: {
@@ -17,6 +19,7 @@ type LockedCartRow = {
   itemProductId: string | null;
   quantity: number | null;
   priceSnapshot: Prisma.Decimal | null;
+  itemExpiresAt: Date | null;
   productId: string | null;
   productName: string | null;
   productPrice: Prisma.Decimal | null;
@@ -31,6 +34,10 @@ type LockedCartRow = {
   targetProductActive: boolean | null;
 };
 
+export async function releaseExpiredReservations(_tx: Prisma.TransactionClient, _now = new Date()) {
+  return 0;
+}
+
 function lockedCartResult(rows: LockedCartRow[], guestToken: string | null, clearGuestCookie: boolean) {
   const items = rows.flatMap((row) => row.itemId && row.itemProductId && row.productId && row.quantity !== null && row.priceSnapshot
     ? [{
@@ -38,6 +45,7 @@ function lockedCartResult(rows: LockedCartRow[], guestToken: string | null, clea
         productId: row.itemProductId,
         quantity: row.quantity,
         priceSnapshot: row.priceSnapshot,
+        expiresAt: row.itemExpiresAt,
         product: {
           id: row.productId,
           name: row.productName ?? "",
@@ -109,6 +117,7 @@ export async function getOrCreateActiveCart(
         item."productId" AS "itemProductId",
         item."quantity" AS "quantity",
         item."priceSnapshot" AS "priceSnapshot",
+        item."expiresAt" AS "itemExpiresAt",
         product."id" AS "productId",
         product."name" AS "productName",
         product."price" AS "productPrice",
@@ -144,6 +153,7 @@ export async function getOrCreateActiveCart(
         item."productId" AS "itemProductId",
         item."quantity" AS "quantity",
         item."priceSnapshot" AS "priceSnapshot",
+        item."expiresAt" AS "itemExpiresAt",
         product."id" AS "productId",
         product."name" AS "productName",
         product."price" AS "productPrice",

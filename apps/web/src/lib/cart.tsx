@@ -18,6 +18,8 @@ export type Line = {
   available?: boolean;
   currentPrice?: number;
   priceChanged?: boolean;
+  expiresAt?: string | null;
+  remainingSeconds?: number | null;
 };
 
 type CartContextValue = {

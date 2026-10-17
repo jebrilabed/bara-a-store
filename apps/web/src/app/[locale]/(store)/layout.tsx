@@ -1,4 +1,5 @@
 import { CartProvider } from "@/lib/cart";
+import { WishlistProvider } from "@/lib/wishlist";
 import Header from "@/components/storefront/Header";
 import Footer from "@/components/storefront/Footer";
 import { getSettings } from "@/lib/settings";
@@ -18,16 +19,18 @@ export default async function L({ children, params }: { children: React.ReactNod
 
   return (
     <CartProvider>
-      <Header locale={params.locale} isAuthenticated={Boolean(session?.user)} storeName={settings.store_name} />
-      <main className="wrap">{children}</main>
-      <Footer
-        locale={params.locale}
-        storeName={settings.store_name}
-        storeDescription={settings.store_description}
-        storeAddress={settings.store_address}
-        whatsapp={settings.whatsapp}
-        storeEmail={settings.store_email}
-      />
+      <WishlistProvider>
+        <Header locale={params.locale} isAuthenticated={Boolean(session?.user)} storeName={settings.store_name} />
+        <main className="wrap">{children}</main>
+        <Footer
+          locale={params.locale}
+          storeName={settings.store_name}
+          storeDescription={settings.store_description}
+          storeAddress={settings.store_address}
+          whatsapp={settings.whatsapp}
+          storeEmail={settings.store_email}
+        />
+      </WishlistProvider>
     </CartProvider>
   );
 }

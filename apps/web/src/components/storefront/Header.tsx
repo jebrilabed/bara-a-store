@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CircleUserRound, LogIn } from "lucide-react";
+import { CircleUserRound, Heart, LogIn } from "lucide-react";
 import { useCart } from "@/lib/cart";
+import { useWishlist } from "@/lib/wishlist";
 import "./Header.css";
 
 type HeaderProps = {
@@ -15,6 +16,7 @@ type HeaderProps = {
 
 export default function Header({ locale, isAuthenticated, storeName = "متجر براعة" }: HeaderProps) {
   const { count } = useCart();
+  const { count: wishlistCount } = useWishlist();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
@@ -76,6 +78,18 @@ export default function Header({ locale, isAuthenticated, storeName = "متجر 
             </Link>
           )}
 
+          <Link
+            href={`${localePath}/wishlist`}
+            className={`header-wishlist${isActive(`${localePath}/wishlist`) ? " is-active" : ""}`}
+            aria-label={`المفضلة، عدد المنتجات ${wishlistCount}`}
+            title="المفضلة"
+            aria-current={isActive(`${localePath}/wishlist`) ? "page" : undefined}
+            onClick={closeMenu}
+          >
+            <Heart size={20} aria-hidden="true" />
+            {wishlistCount > 0 && <span className="header-wishlist__count" aria-hidden="true">{wishlistCount}</span>}
+          </Link>
+
           <Link href={`${localePath}/cart`} className={`header-cart${isActive(`${localePath}/cart`) ? " is-active" : ""}`} aria-label={`السلة، عدد المنتجات ${count}`} title="السلة" aria-current={isActive(`${localePath}/cart`) ? "page" : undefined} onClick={closeMenu}>
             <span className="header-cart__visual">
               <svg className="header-cart__icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -120,6 +134,7 @@ export default function Header({ locale, isAuthenticated, storeName = "متجر 
             return <Link key={item.href} href={item.href} className={active ? "is-active" : undefined} aria-current={active ? "page" : undefined} onClick={closeMenu}>{item.label}</Link>;
           })}
           <Link href={accountHref} className={`mobile-store-menu__account${isAuthenticated ? "" : " is-login"}${isActive(accountHref) ? " is-active" : ""}`} aria-current={isActive(accountHref) ? "page" : undefined} onClick={closeMenu}>{accountLabel}</Link>
+          <Link href={`${localePath}/wishlist`} className={isActive(`${localePath}/wishlist`) ? "is-active" : undefined} aria-current={isActive(`${localePath}/wishlist`) ? "page" : undefined} onClick={closeMenu}>المفضلة ({wishlistCount})</Link>
           <Link href={`${localePath}/cart`} className={isActive(`${localePath}/cart`) ? "is-active" : undefined} aria-current={isActive(`${localePath}/cart`) ? "page" : undefined} onClick={closeMenu}>السلة ({count})</Link>
         </nav>
       </aside>

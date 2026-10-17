@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getStorefrontProduct } from "@/lib/storefront/catalog";
 import AddToCart from "@/components/storefront/AddToCart";
+import FavoriteButton from "@/components/storefront/FavoriteButton";
 import { Check } from "lucide-react";
 import styles from "./ProductDetails.module.css";
 export const dynamic = "force-dynamic";
@@ -9,7 +10,21 @@ export default async function P({ params }: any) {
   const p = await getStorefrontProduct(decodeURIComponent(params.slug)); if (!p) notFound();
 
   return <>
-    <div className="hero"><div className="blob"><img src={p.image || "/logo.png"} alt={p.name} /></div><div><h1>{p.name}</h1><p>{p.description}</p><p className="price">{p.price} ₪</p><AddToCart id={p.id} name={p.name} price={p.price} stock={p.stock} quantitySelector /></div></div>
+    <div className="hero">
+      <div className="blob" style={{ position: "relative" }}>
+        <img src={p.image || "/logo.png"} alt={p.name} />
+        <FavoriteButton product={p} variant="floating" />
+      </div>
+      <div>
+        <h1>{p.name}</h1>
+        <p>{p.description}</p>
+        <p className="price">{p.price} ₪</p>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <AddToCart id={p.id} name={p.name} price={p.price} stock={p.stock} quantitySelector />
+          <FavoriteButton product={p} variant="inline" />
+        </div>
+      </div>
+    </div>
     {p.features?.length > 0 && (
       <section className={styles.features} aria-labelledby="product-features-heading">
         <h2 id="product-features-heading">مميزات المنتج</h2>
