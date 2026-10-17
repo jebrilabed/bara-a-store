@@ -73,6 +73,7 @@ model Product {
 
   @@index([active, type])
   @@index([categoryId, active])
+  @@index([active, name])
 }
 
 model Cart {
@@ -127,6 +128,7 @@ model Order {
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
+  @@index([createdAt])
 }
 
 model OrderItem {
@@ -161,6 +163,9 @@ model Notification {
   text      String
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([read, createdAt])
+  @@index([createdAt])
 }
 
 model AdminAuditLog {

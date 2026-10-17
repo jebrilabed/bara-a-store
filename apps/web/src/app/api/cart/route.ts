@@ -26,18 +26,34 @@ function getCartPerfId(request: NextRequest) {
 }
 
 function cartPayload(cart: any) {
-  const items = cart.items.map((line: any) => ({
-    id: line.productId,
-    name: line.product.name,
-    price: Number(line.priceSnapshot.toString()),
-    currentPrice: Number(line.product.price.toString()),
-    priceChanged: !line.priceSnapshot.equals(line.product.price),
-    stock: line.product.stock,
-    image: line.product.image,
-    qty: line.quantity,
-    available: line.product.active,
-  }));
-  return { items, total: items.reduce((sum: number, line: any) => sum + line.price * line.qty, 0) };
+  const rawItems = Array.isArray(cart?.items) ? cart.items : [];
+  const items = rawItems
+    .filter((line: any) => line && line.productId && line.product)
+    .map((line: any) => {
+      const priceSnapshotNum = Number(line.priceSnapshot?.toString?.() ?? line.priceSnapshot ?? 0);
+      const currentPriceNum = Number(line.product?.price?.toString?.() ?? line.product?.price ?? priceSnapshotNum);
+      const hasEquals = typeof line.priceSnapshot?.equals === "function";
+      const priceChanged = hasEquals && line.product?.price
+        ? !line.priceSnapshot.equals(line.product.price)
+        : priceSnapshotNum !== currentPriceNum;
+
+      return {
+        id: line.productId,
+        name: String(line.product.name ?? ""),
+        price: priceSnapshotNum,
+        currentPrice: currentPriceNum,
+        priceChanged,
+        stock: Number(line.product.stock ?? 0),
+        image: line.product.image ?? null,
+        qty: Number(line.quantity ?? 1),
+        available: Boolean(line.product.active),
+      };
+    });
+
+  return {
+    items,
+    total: items.reduce((sum: number, line: any) => sum + line.price * line.qty, 0),
+  };
 }
 
 function applyCartCookie(response: NextResponse, result: any) {
@@ -57,6 +73,7 @@ function applyCartCookie(response: NextResponse, result: any) {
 }
 
 function errorResponse(error: unknown) {
+  console.error("[cart-api-error]", error);
   if (error instanceof InputError) {
     return NextResponse.json({ error: error.message }, { status: error.status, headers: { "Cache-Control": "private, no-store" } });
   }
@@ -82,8 +99,9 @@ export async function GET(request: NextRequest) {
     stages.authMs = performance.now() - stageStartedAt;
     const cookie = request.cookies.get(CART_COOKIE_NAME)?.value;
     stageStartedAt = performance.now();
-    const result = await db.$transaction((tx) =>
-      getOrCreateActiveCart(tx, user?.id ?? null, validCartToken(cookie) ? cookie : null),
+    const result = await db.$transaction(
+      (tx) => getOrCreateActiveCart(tx, user?.id ?? null, validCartToken(cookie) ? cookie : null),
+      { timeout: 15000, maxWait: 10000 },
     );
     stages.transactionMs = performance.now() - stageStartedAt;
     stageStartedAt = performance.now();
@@ -118,7 +136,8 @@ export async function POST(request: NextRequest) {
       ? body.productId
       : null;
     stageStartedAt = performance.now();
-    const result = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(
+      async (tx) => {
       const callbackStartedAt = performance.now();
       let queryStartedAt = performance.now();
       const resolved = await getOrCreateActiveCart(tx, user?.id ?? null, validCartToken(cookie) ? cookie : null, false, true, requestedProductId);
@@ -240,7 +259,7 @@ export async function POST(request: NextRequest) {
         ...resolved,
         cart: { ...cart, items: responseItems },
       };
-    });
+    }, { timeout: 20000, maxWait: 10000 });
     stages.transactionMs = performance.now() - stageStartedAt;
     stages.transactionBoundaryMs = Math.max(0, stages.transactionMs - stages.transactionCallbackMs);
     stageStartedAt = performance.now();

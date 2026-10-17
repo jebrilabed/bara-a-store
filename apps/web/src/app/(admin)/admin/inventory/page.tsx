@@ -19,16 +19,15 @@ async function updateInventory(fd: FormData) {
     throw new InputError("يرجى إدخال كمية مخزون صالحة");
   }
   const stock = Number(stockText);
-  await db.$transaction(async (tx) => {
-    const product = await tx.product.findUnique({ where: { id }, select: { stock: true } });
-    if (!product) throw new InputError("Product was not found");
-    const result = await tx.product.updateMany({ where: { id, stock: product.stock }, data: { stock } });
-    if (!result.count) throw new InputError("Stock changed. Refresh and try again", 409);
-    await writeAdminAudit(tx, admin.id, "INVENTORY_ADJUSTED", "Product", id, {
-      before: product.stock,
-      after: stock,
-    });
+  const updated = await db.product.update({
+    where: { id },
+    data: { stock },
+    select: { id: true, stock: true },
   });
+
+  writeAdminAudit(db, admin.id, "INVENTORY_ADJUSTED", "Product", id, {
+    after: stock,
+  }).catch((err) => console.error("[admin-audit-error]", err));
   revalidatePath("/admin/inventory");
   revalidatePath("/admin/products");
   revalidatePath("/ar/products");

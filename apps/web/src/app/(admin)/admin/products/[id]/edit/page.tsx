@@ -20,30 +20,31 @@ async function updateProduct(fd: FormData) {
   if (!id || id.length > 100) throw new InputError("Invalid product");
   const input = parseProductInput(fd);
   const { categoryId } = input;
-  const [existing, category] = await Promise.all([
+  const [existing, category, image] = await Promise.all([
     db.product.findUnique({ where: { id }, select: { id: true } }),
     db.category.findUnique({ where: { id: categoryId }, select: { id: true } }),
+    uploadProductImage(fd.get("image")),
   ]);
   if (!existing) throw new InputError("Product was not found");
   if (!category) throw new InputError("يرجى اختيار قسم صالح وموجود");
-  const image = await uploadProductImage(fd.get("image"));
 
-  await db.$transaction(async (tx) => {
-    await tx.product.update({
-      where: { id },
-      data: {
-        name: input.name,
-        description: input.description,
-        price: input.price,
-        compareAtPrice: input.compareAtPrice,
-        stock: input.stock,
-        features: input.features,
-        image: image ?? undefined,
-        category: { connect: { id: categoryId } },
-      },
-    });
-    await writeAdminAudit(tx, admin.id, "PRODUCT_UPDATED", "Product", id);
+  await db.product.update({
+    where: { id },
+    data: {
+      name: input.name,
+      description: input.description,
+      price: input.price,
+      compareAtPrice: input.compareAtPrice,
+      stock: input.stock,
+      features: input.features,
+      image: image ?? undefined,
+      category: { connect: { id: categoryId } },
+    },
   });
+
+  writeAdminAudit(db, admin.id, "PRODUCT_UPDATED", "Product", id).catch((err) =>
+    console.error("[admin-audit-error]", err)
+  );
 
   revalidatePath("/admin/products");
   revalidatePath("/ar");

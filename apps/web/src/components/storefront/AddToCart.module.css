@@ -1,0 +1,1 @@
+.controls{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-block:12px}.quantity{display:grid;gap:4px;color:var(--soft);font-size:.85rem;font-weight:700}.quantityInput{width:88px;min-height:44px;text-align:center}.message{display:block;margin-top:8px;color:var(--rose-d)}

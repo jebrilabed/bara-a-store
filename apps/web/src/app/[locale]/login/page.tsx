@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import LoadingButton from "@/components/ui/LoadingButton";
 
-export default function Login({ searchParams }: { searchParams?: { error?: string } }) {
+import { getSetting } from "@/lib/settings";
+
+export default async function Login({ searchParams }: { searchParams?: { error?: string } }) {
+  const storeName = await getSetting("store_name", "متجر براعة");
   const hasError = Boolean(searchParams?.error);
   const errorMessage = searchParams?.error === "admin"
     ? "هذا الحساب لا يملك صلاحية دخول لوحة الإدارة. سجّلي الدخول بحساب إداري."
@@ -25,7 +28,7 @@ export default function Login({ searchParams }: { searchParams?: { error?: strin
       >
         <div style={{ textAlign: "center", marginBottom: "28px" }}>
           <Link href="/ar" style={{ display: "inline-block", marginBottom: "12px" }}>
-            <img src="/logo.png" alt="متجر براعة" style={{ width: "64px", height: "64px", borderRadius: "50%", margin: "auto" }} />
+            <img src="/logo.png" alt={storeName} style={{ width: "64px", height: "64px", borderRadius: "50%", margin: "auto" }} />
           </Link>
           <h1 style={{ fontSize: "1.6rem", fontWeight: 900, color: "var(--rose-d)", margin: "0 0 6px" }}>
             مرحباً بعودتكِ

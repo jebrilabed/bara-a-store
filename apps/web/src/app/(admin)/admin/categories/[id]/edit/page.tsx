@@ -21,21 +21,21 @@ async function updateCategory(fd: FormData) {
   if (!name || name.length > 120) throw new InputError("يرجى إدخال عنوان صالح للقسم");
   if (description.length > 1000) throw new InputError("وصف القسم طويل جدًا");
 
-  const category = await db.category.findUnique({ where: { id }, select: { id: true } });
-  if (!category) throw new InputError("Category was not found");
-
   const baseSlug = makeSlug(name) || `cat-${randomBytes(4).toString("hex")}`;
-  const collision = await db.category.findFirst({
-    where: { slug: baseSlug, id: { not: id } },
-    select: { id: true },
-  });
+  const [existing, collision] = await Promise.all([
+    db.category.findUnique({ where: { id }, select: { id: true } }),
+    db.category.findFirst({
+      where: { slug: baseSlug, id: { not: id } },
+      select: { id: true },
+    }),
+  ]);
+  if (!existing) throw new InputError("Category was not found");
   const slug = collision ? `${baseSlug}-${randomBytes(2).toString("hex")}` : baseSlug;
 
-  await db.$transaction(async (tx) => {
-    const updated = await tx.category.update({ where: { id }, data: { name, description, slug } });
-    await writeAdminAudit(tx, admin.id, "CATEGORY_UPDATED", "Category", id, { name, slug });
-    return updated;
-  });
+  const updated = await db.category.update({ where: { id }, data: { name, description, slug } });
+  writeAdminAudit(db, admin.id, "CATEGORY_UPDATED", "Category", id, { name, slug }).catch((err) =>
+    console.error("[admin-audit-error]", err)
+  );
 
   revalidatePath("/admin/categories");
   revalidatePath("/ar");

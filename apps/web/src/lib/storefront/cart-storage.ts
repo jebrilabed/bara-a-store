@@ -192,10 +192,14 @@ export async function getOrCreateActiveCart(
         where: { userId, status: "ACTIVE", expiresAt: { lte: now } },
         data: { status: "ABANDONED" },
       });
+    } else {
+      await tx.cart.updateMany({
+        where: { userId, status: "ACTIVE", id: { not: userCart.id } },
+        data: { status: "ABANDONED" },
+      });
     }
 
     if (guestCart && guestCart.userId !== userId) {
-      await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${guestCart.id} FOR UPDATE`;
       if (!userCart) {
         userCart = await tx.cart.update({
           where: { id: guestCart.id },
@@ -203,29 +207,34 @@ export async function getOrCreateActiveCart(
           include: includeItems ? cartItemsInclude : undefined,
         });
       } else {
-        await tx.$queryRaw`SELECT "id" FROM "Cart" WHERE "id" = ${userCart.id} FOR UPDATE`;
         const guestItems = await tx.cartItem.findMany({
           where: { cartId: guestCart.id },
           include: { product: true },
         });
-        for (const line of guestItems) {
-          if (!line.product.active || line.product.stock < 1) continue;
-          const existing = await tx.cartItem.findUnique({
-            where: { cartId_productId: { cartId: userCart.id, productId: line.productId } },
+        if (guestItems.length > 0) {
+          const userItems = await tx.cartItem.findMany({
+            where: { cartId: userCart.id },
           });
-          const quantity = Math.min(line.product.stock, 99, line.quantity + (existing?.quantity ?? 0));
-          if (quantity < 1) continue;
-          await tx.cartItem.upsert({
-            where: { cartId_productId: { cartId: userCart.id, productId: line.productId } },
-            create: { cartId: userCart.id, productId: line.productId, quantity, priceSnapshot: line.product.price },
-            update: { quantity, priceSnapshot: line.product.price },
-          });
+          const userItemMap = new Map(userItems.map((i) => [i.productId, i]));
+          for (const line of guestItems) {
+            if (!line.product.active || line.product.stock < 1) continue;
+            const existing = userItemMap.get(line.productId);
+            const quantity = Math.min(line.product.stock, 99, line.quantity + (existing?.quantity ?? 0));
+            if (quantity < 1) continue;
+            await tx.cartItem.upsert({
+              where: { cartId_productId: { cartId: userCart.id, productId: line.productId } },
+              create: { cartId: userCart.id, productId: line.productId, quantity, priceSnapshot: line.product.price },
+              update: { quantity, priceSnapshot: line.product.price },
+            });
+          }
         }
         await tx.cart.update({ where: { id: guestCart.id }, data: { status: "ABANDONED" } });
-        userCart = await tx.cart.findUniqueOrThrow({
-          where: { id: userCart.id },
-          include: includeItems ? cartItemsInclude : undefined,
-        });
+        if (includeItems) {
+          userCart = await tx.cart.findUniqueOrThrow({
+            where: { id: userCart.id },
+            include: cartItemsInclude,
+          });
+        }
       }
     }
 

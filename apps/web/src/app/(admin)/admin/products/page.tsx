@@ -23,11 +23,13 @@ async function setProductActive(fd: FormData) {
   if (activeValue !== "true" && activeValue !== "false") throw new InputError("Invalid product status");
   const active = activeValue === "true";
 
-  await db.$transaction(async (tx) => {
-    const result = await tx.product.updateMany({ where: { id }, data: { active } });
-    if (!result.count) throw new InputError("Product was not found");
-    await writeAdminAudit(tx, admin.id, active ? "PRODUCT_ACTIVATED" : "PRODUCT_DEACTIVATED", "Product", id);
-  });
+  const result = await db.product.updateMany({ where: { id }, data: { active } });
+  if (!result.count) throw new InputError("Product was not found");
+
+  writeAdminAudit(db, admin.id, active ? "PRODUCT_ACTIVATED" : "PRODUCT_DEACTIVATED", "Product", id).catch((err) =>
+    console.error("[admin-audit-error]", err)
+  );
+
   revalidatePath("/admin/products");
   revalidatePath("/ar");
   revalidatePath("/ar/products");
@@ -42,13 +44,15 @@ async function deleteProduct(fd: FormData) {
   const id = String(fd.get("id") ?? "");
   if (!id || id.length > 100) throw new InputError("Invalid product");
 
-  await db.$transaction(async (tx) => {
-    const product = await tx.product.findUnique({ where: { id }, select: { id: true, slug: true } });
-    if (!product) throw new InputError("Product was not found");
-    await tx.cartItem.deleteMany({ where: { productId: id } });
-    await tx.product.delete({ where: { id } });
-    await writeAdminAudit(tx, admin.id, "PRODUCT_DELETED", "Product", id, { slug: product.slug });
-  });
+  // Single batch operation to clean cart items and delete product
+  await db.$transaction([
+    db.cartItem.deleteMany({ where: { productId: id } }),
+    db.product.delete({ where: { id } }),
+  ]);
+
+  writeAdminAudit(db, admin.id, "PRODUCT_DELETED", "Product", id).catch((err) =>
+    console.error("[admin-audit-error]", err)
+  );
 
   revalidatePath("/admin/products");
   revalidatePath("/ar");

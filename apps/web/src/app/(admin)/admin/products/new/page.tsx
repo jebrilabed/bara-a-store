@@ -19,31 +19,33 @@ async function createProduct(fd: FormData) {
   "use server";
   const admin = await requireAdmin();
   const input = parseProductInput(fd);
-  const category = await db.category.findUnique({ where: { id: input.categoryId }, select: { id: true } });
+
+  // Run category verification and image upload concurrently
+  const [category, image] = await Promise.all([
+    db.category.findUnique({ where: { id: input.categoryId }, select: { id: true } }),
+    uploadProductImage(fd.get("image")),
+  ]);
   if (!category) throw new InputError("يرجى اختيار قسم صالح وموجود");
-  const image = await uploadProductImage(fd.get("image"));
 
   const suffix = randomBytes(4).toString("hex");
   const { categoryId, ...productInput } = input;
 
-  const product = await db.$transaction(async (tx) => {
-    const created = await tx.product.create({
-      data: {
-        ...productInput,
-        type: productInput.type as ProductType,
-        image: image ?? productInput.image,
-        slug: `${input.slug || "product"}-${suffix}`,
-        skuCode: productInput.skuCode ?? `BS-${randomBytes(6).toString("hex").toUpperCase()}`,
-        category: { connect: { id: categoryId } },
-      },
-    });
-    await writeAdminAudit(tx, admin.id, "PRODUCT_CREATED", "Product", created.id, {
-      type: created.type,
-      skuCode: created.skuCode,
-      price: created.price.toString(),
-    });
-    return created;
+  const created = await db.product.create({
+    data: {
+      ...productInput,
+      type: productInput.type as ProductType,
+      image: image ?? productInput.image,
+      slug: `${input.slug || "product"}-${suffix}`,
+      skuCode: productInput.skuCode ?? `BS-${randomBytes(6).toString("hex").toUpperCase()}`,
+      category: { connect: { id: categoryId } },
+    },
   });
+
+  writeAdminAudit(db, admin.id, "PRODUCT_CREATED", "Product", created.id, {
+    type: created.type,
+    skuCode: created.skuCode,
+    price: created.price.toString(),
+  }).catch((err) => console.error("[admin-audit-error]", err));
 
   revalidatePath("/admin/products");
   revalidatePath("/admin/inventory");

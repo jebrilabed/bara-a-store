@@ -1,18 +1,23 @@
-export default function StorefrontLoading() {
+export default function StoreLoading() {
   return (
-    <section role="status" aria-label="جار تحميل المتجر" style={{ display: "grid", gap: "24px" }}>
-      <span style={{ color: "var(--soft)" }}>جار تحميل الصفحة...</span>
-      <div className="grid" aria-hidden="true">
-        {Array.from({ length: 6 }, (_, index) => (
-          <div className="card" key={index}>
-            <div style={{ aspectRatio: "1", background: "var(--mist)" }} />
-            <div className="in">
-              <span style={{ display: "block", height: "18px", width: "72%", borderRadius: "6px", background: "var(--blush)" }} />
-              <span style={{ display: "block", height: "16px", width: "38%", borderRadius: "6px", background: "var(--mist)" }} />
+    <div className="store-loading" role="status" aria-live="polite" aria-label="جارٍ تحميل الصفحة...">
+      <div className="store-loading__header">
+        <div className="store-loading__title skeleton-shimmer" />
+        <div className="store-loading__subtitle skeleton-shimmer" />
+      </div>
+
+      <div className="store-loading__grid" aria-hidden="true">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="store-loading__card">
+            <div className="store-loading__card-img skeleton-shimmer" />
+            <div className="store-loading__card-body">
+              <div className="store-loading__card-line skeleton-shimmer" style={{ width: "80%" }} />
+              <div className="store-loading__card-line skeleton-shimmer" style={{ width: "50%" }} />
+              <div className="store-loading__card-price skeleton-shimmer" style={{ width: "35%" }} />
             </div>
           </div>
         ))}
       </div>
-    </section>
+    </div>
   );
 }

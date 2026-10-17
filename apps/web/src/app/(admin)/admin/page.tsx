@@ -26,7 +26,7 @@ type DashboardData = {
 };
 
 export default async function DashboardPage() {
-  const [data, storeAddress] = await Promise.all([
+  const [data, storeName, storeAddress] = await Promise.all([
     db.$queryRaw<DashboardData[]>`
       SELECT
         (SELECT COUNT(*)::int FROM "Order") AS "orderCount",
@@ -67,6 +67,7 @@ export default async function DashboardPage() {
           JOIN "Category" category ON category."id" = latest."categoryId"
         ) AS "latestProducts"
     `,
+    getSetting("store_name", "متجر براعة"),
     getSetting("store_address", "فلسطين"),
   ]);
   const dashboard = data[0];
@@ -85,7 +86,7 @@ export default async function DashboardPage() {
     <section className="dashboard-page">
       <header className="dashboard-header">
         <div>
-          <span className="dashboard-eyebrow">متجر براعة</span>
+          <span className="dashboard-eyebrow">{storeName}</span>
           <h2>لوحة التحكم</h2>
           <p>ملخص سريع لما يحتاج متابعة في متجرك.</p>
           <p style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "5px" }}>

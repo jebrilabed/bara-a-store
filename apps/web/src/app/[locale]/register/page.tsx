@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { signIn } from "@/auth";
 import { db } from "@/lib/db";
 import LoadingButton from "@/components/ui/LoadingButton";
+import { getSetting } from "@/lib/settings";
 
 async function register(fd: FormData) {
   "use server";
@@ -52,7 +53,8 @@ async function register(fd: FormData) {
   await signIn("credentials", { email, password, redirectTo: "/ar/account" });
 }
 
-export default function Register({ searchParams }: { searchParams?: { error?: string } }) {
+export default async function Register({ searchParams }: { searchParams?: { error?: string } }) {
+  const storeName = await getSetting("store_name", "متجر براعة");
   const message =
     searchParams?.error === "exists"
       ? "هذا البريد الإلكتروني مسجل مسبقاً. يمكنكِ تسجيل الدخول مباشرة."
@@ -75,10 +77,10 @@ export default function Register({ searchParams }: { searchParams?: { error?: st
       >
         <div style={{ textAlign: "center", marginBottom: "28px" }}>
           <Link href="/ar" style={{ display: "inline-block", marginBottom: "12px" }}>
-            <img src="/logo.png" alt="متجر براعة" style={{ width: "64px", height: "64px", borderRadius: "50%", margin: "auto" }} />
+            <img src="/logo.png" alt={storeName} style={{ width: "64px", height: "64px", borderRadius: "50%", margin: "auto" }} />
           </Link>
           <h1 style={{ fontSize: "1.6rem", fontWeight: 900, color: "var(--rose-d)", margin: "0 0 6px" }}>
-            حساب جديد في براعة
+            حساب جديد في {storeName}
           </h1>
           <p style={{ color: "var(--soft)", fontSize: "0.95rem", margin: 0 }}>
             انضمي إلينا لتجربة تسوق أسرع وعروض مميزة

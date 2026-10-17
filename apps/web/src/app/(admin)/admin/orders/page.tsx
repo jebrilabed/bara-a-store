@@ -51,26 +51,34 @@ async function changeStatus(fd: FormData) {
   const nextStatus = String(fd.get("status") ?? "");
   if (!id || id.length > 100) throw new InputError("Invalid order");
 
-  await db.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id }, include: { items: true } });
-    if (!order) throw new InputError("Order was not found");
-    if (!canTransitionOrder(order.status, nextStatus)) throw new InputError("That order status change is not allowed", 409);
-    const updated = await tx.order.updateMany({ where: { id, status: order.status }, data: { status: nextStatus } });
-    if (!updated.count) throw new InputError("Order status changed. Refresh and try again", 409);
-
-    if (nextStatus === "CANCELLED") {
-      for (const item of order.items) {
-        if (item.productId) {
-          await tx.product.update({ where: { id: item.productId }, data: { stock: { increment: item.qty } } });
-        }
-      }
-    }
-
-    await writeAdminAudit(tx, admin.id, "ORDER_STATUS_CHANGED", "Order", id, {
-      from: order.status,
-      to: nextStatus,
-    });
+  const order = await db.order.findUnique({
+    where: { id },
+    include: { items: { select: { productId: true, qty: true } } },
   });
+  if (!order) throw new InputError("Order was not found");
+  if (!canTransitionOrder(order.status, nextStatus)) throw new InputError("That order status change is not allowed", 409);
+
+  if (nextStatus === "CANCELLED") {
+    const stockUpdates = order.items
+      .filter((item) => item.productId)
+      .map((item) =>
+        db.product.update({
+          where: { id: item.productId! },
+          data: { stock: { increment: item.qty } },
+        }),
+      );
+    await db.$transaction([
+      db.order.update({ where: { id }, data: { status: nextStatus } }),
+      ...stockUpdates,
+    ]);
+  } else {
+    await db.order.update({ where: { id }, data: { status: nextStatus } });
+  }
+
+  writeAdminAudit(db, admin.id, "ORDER_STATUS_CHANGED", "Order", id, {
+    from: order.status,
+    to: nextStatus,
+  }).catch((err) => console.error("[admin-audit-error]", err));
   revalidatePath("/admin/orders");
   revalidatePath("/ar/orders");
   if (nextStatus === "CANCELLED") revalidatePublicCatalog();
@@ -112,7 +120,7 @@ export default async function OrdersPage({ searchParams }: { searchParams?: { pa
           </p>
         </div>
         <div style={{ background: "var(--blush)", padding: "8px 16px", borderRadius: "14px", fontWeight: 800, color: "var(--rose-d)" }}>
-          إجمالي الطلبات: {orders.length}
+          إجمالي الطلبات: {totalOrders}
         </div>
       </div>
 

@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { href: "/admin/settings", label: "الإعدادات", icon: Settings },
 ];
 
-export default function AdminNav() {
+export default function AdminNav({ storeName = "متجر براعة" }: { storeName?: string }) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -38,7 +38,7 @@ export default function AdminNav() {
       <div className="admin-brand">
         <img src="/logo.png" width={42} height={42} alt="" />
         <div>
-          <div className="admin-brand__name">متجر براعة</div>
+          <div className="admin-brand__name">{storeName}</div>
           <div className="admin-brand__caption">لوحة التحكم</div>
         </div>
       </div>

@@ -32,20 +32,18 @@ async function createCategory(fd: FormData) {
     slug = `${slug}-${Date.now().toString().slice(-4)}`;
   }
 
-  const category = await db.$transaction(async (tx) => {
-    const created = await tx.category.create({
-      data: {
-        name,
-        slug,
-        description,
-      } as any,
-    });
-    await writeAdminAudit(tx, admin.id, "CATEGORY_CREATED", "Category", created.id, {
+  const created = await db.category.create({
+    data: {
       name,
       slug,
-    });
-    return created;
+      description,
+    } as any,
   });
+
+  writeAdminAudit(db, admin.id, "CATEGORY_CREATED", "Category", created.id, {
+    name,
+    slug,
+  }).catch((err) => console.error("[admin-audit-error]", err));
 
   revalidatePath("/admin/categories");
   revalidatePath("/ar");

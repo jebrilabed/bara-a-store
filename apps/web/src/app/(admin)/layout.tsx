@@ -6,7 +6,27 @@ import { cairo } from "@/lib/font";
 import AdminNav from "@/components/admin/AdminNav";
 import NavigationProgress from "@/components/ui/NavigationProgress";
 import ToastProvider from "@/components/ui/ToastProvider";
+import { getSetting } from "@/lib/settings";
+
 export default async function A({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser(); if (user?.role !== "ADMIN") redirect("/ar/login");
-  return <html lang="ar" dir="rtl"><body className={cairo.className}><ToastProvider><Suspense fallback={null}><NavigationProgress /></Suspense><div className="adm"><AdminNav /><main>{children}</main></div></ToastProvider></body></html>;
+  const [user, storeName] = await Promise.all([
+    getCurrentUser(),
+    getSetting("store_name", "متجر براعة"),
+  ]);
+  if (user?.role !== "ADMIN") redirect("/ar/login");
+  return (
+    <html lang="ar" dir="rtl">
+      <body className={cairo.className}>
+        <ToastProvider>
+          <Suspense fallback={null}>
+            <NavigationProgress />
+          </Suspense>
+          <div className="adm">
+            <AdminNav storeName={storeName} />
+            <main>{children}</main>
+          </div>
+        </ToastProvider>
+      </body>
+    </html>
+  );
 }

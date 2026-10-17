@@ -10,9 +10,10 @@ import "./Header.css";
 type HeaderProps = {
   locale: string;
   isAuthenticated: boolean;
+  storeName?: string;
 };
 
-export default function Header({ locale, isAuthenticated }: HeaderProps) {
+export default function Header({ locale, isAuthenticated, storeName = "متجر براعة" }: HeaderProps) {
   const { count } = useCart();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -53,7 +54,7 @@ export default function Header({ locale, isAuthenticated }: HeaderProps) {
     <header ref={headerRef} className="top">
       <div className="wrap">
         <Link href={localePath} className="brand" onClick={closeMenu}>
-          <img src="/logo.png" alt="شعار براعة" />متجر براعة
+          <img src="/logo.png" alt={storeName} />{storeName}
         </Link>
 
         <nav className="store-nav" aria-label="التنقل الرئيسي">

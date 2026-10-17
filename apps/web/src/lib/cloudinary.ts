@@ -41,10 +41,16 @@ export async function uploadProductImage(value: FormDataEntryValue | null): Prom
 
   configureCloudinary();
   const bytes = Buffer.from(await value.arrayBuffer());
-  const uploaded = await cloudinary.uploader.upload(
-    `data:${value.type};base64,${bytes.toString("base64")}`,
-    { folder: "baraa-store/products", resource_type: "image" },
-  );
+  const uploaded = await new Promise<any>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: "baraa-store/products", resource_type: "image" },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      },
+    );
+    uploadStream.end(bytes);
+  });
   return uploaded.secure_url;
 }
 

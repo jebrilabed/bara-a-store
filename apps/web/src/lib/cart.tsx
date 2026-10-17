@@ -23,7 +23,7 @@ export type Line = {
 type CartContextValue = {
   lines: Line[];
   mutating: boolean;
-  add: (product: Pick<Line, "id" | "name" | "price"> & Partial<Pick<Line, "stock" | "image">>) => Promise<void>;
+  add: (product: Pick<Line, "id" | "name" | "price"> & Partial<Pick<Line, "stock" | "image">> & { quantity?: number }) => Promise<void>;
   set: (id: string, quantity: number) => Promise<void>;
   refresh: (id: string) => Promise<void>;
   reload: () => Promise<void>;
@@ -176,12 +176,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const add = async (product: Pick<Line, "id" | "name" | "price"> & Partial<Pick<Line, "stock" | "image">>) => {
-    await mutate("add", { productId: product.id }, (current) => {
+  const add = async (product: Pick<Line, "id" | "name" | "price"> & Partial<Pick<Line, "stock" | "image">> & { quantity?: number }) => {
+    const quantity = product.quantity ?? 1;
+    await mutate("add", { productId: product.id, quantity }, (current) => {
       const existing = current.find((line) => line.id === product.id);
       if (existing) {
         return current.map((line) => line.id === product.id
-          ? { ...line, qty: line.qty + 1, currentPrice: product.price, priceChanged: line.price !== product.price }
+          ? { ...line, qty: line.qty + quantity, currentPrice: product.price, priceChanged: line.price !== product.price }
           : line);
       }
       return [...current, {
@@ -191,7 +192,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         currentPrice: product.price,
         stock: product.stock,
         image: product.image,
-        qty: 1,
+        qty: quantity,
         available: true,
         priceChanged: false,
       }];

@@ -17,19 +17,21 @@ async function deleteCategory(fd: FormData) {
   const id = String(fd.get("id") ?? "");
   if (!id || id.length > 100) throw new InputError("Invalid category");
 
-  await db.$transaction(async (tx) => {
-    const category = await tx.category.findUnique({
-      where: { id },
-      include: { _count: { select: { products: true } } },
-    });
-    if (!category) throw new InputError("Category was not found");
-    if (category._count.products > 0) throw new InputError("لا يمكن حذف قسم مرتبط بمنتجات");
-    await tx.category.delete({ where: { id } });
-    await writeAdminAudit(tx, admin.id, "CATEGORY_DELETED", "Category", id, {
-      name: category.name,
-      slug: category.slug,
-    });
-  });
+  try {
+    const deleted = await db.category.delete({ where: { id } });
+    writeAdminAudit(db, admin.id, "CATEGORY_DELETED", "Category", id, {
+      name: deleted.name,
+      slug: deleted.slug,
+    }).catch((err) => console.error("[admin-audit-error]", err));
+  } catch (error: any) {
+    if (error?.code === "P2003" || error?.message?.includes("Foreign key")) {
+      throw new InputError("لا يمكن حذف قسم مرتبط بمنتجات");
+    }
+    if (error?.code === "P2025") {
+      throw new InputError("Category was not found");
+    }
+    throw error;
+  }
 
   revalidatePath("/admin/categories");
   revalidatePath("/ar");
