@@ -60,7 +60,7 @@ export default function Header({ locale, isAuthenticated, userRole, storeName = 
     <header ref={headerRef} className="top">
       <div className="wrap">
         <Link href={localePath} className="brand" onClick={closeMenu}>
-          <img src="/logo.png" alt={storeName} />{storeName}
+          <img src="/logo.png" alt={storeName} /><span className="brand-name">{storeName}</span>
         </Link>
 
         <nav className="store-nav" aria-label="التنقل الرئيسي">
